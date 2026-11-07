@@ -1,6 +1,7 @@
 // Envia as notificações da Agenda. Roda pelo GitHub Actions a cada 30 minutos.
 // Precisa do segredo FIREBASE_SA (chave da conta de serviço do Firebase, em JSON).
 import admin from 'firebase-admin';
+import webpush from 'web-push';
 
 if (!process.env.FIREBASE_SA) { console.log('FIREBASE_SA não configurado; nada a fazer.'); process.exit(0); }
 admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SA)) });
@@ -27,13 +28,25 @@ const clip = (s, n) => s.length > n ? s.slice(0, n - 1) + '…' : s;
 const now = nowSP();
 const today = now.date, tomorrow = addDays(today, 1);
 
+// Chaves do Web Push: criadas automaticamente na primeira execução.
+// A privada fica fora da área que o app pode ler; a pública fica onde o app busca.
+const secretRef = db.collection('secrets').doc('vapid');
+let keys = (await secretRef.get()).data();
+if (!keys || !keys.privateKey) {
+  keys = webpush.generateVAPIDKeys();
+  await secretRef.set(keys);
+  console.log('Chaves de notificação criadas.');
+}
+await U.collection('meta').doc('vapid').set({ publicKey: keys.publicKey });
+webpush.setVapidDetails('https://jaaacked-07.github.io/jaaacked.agenda/', keys.publicKey, keys.privateKey);
+
 const [itemsSnap, catsSnap, tokSnap, notifDoc, logDoc] = await Promise.all([
-  U.collection('items').get(), U.collection('cats').get(), U.collection('tokens').get(),
+  U.collection('items').get(), U.collection('cats').get(), U.collection('subs').get(),
   U.collection('meta').doc('notif').get(), U.collection('meta').doc('sentlog').get()
 ]);
 const cfg = Object.assign({}, DEF, notifDoc.exists ? notifDoc.data() : {});
 if (cfg.enabled === false) { console.log('Notificações desligadas.'); process.exit(0); }
-const tokens = tokSnap.docs.map(d => ({ ref: d.ref, token: d.data().token })).filter(t => t.token);
+const tokens = tokSnap.docs.map(d => { try { return { ref: d.ref, sub: JSON.parse(d.data().sub) }; } catch (e) { return null; } }).filter(t => t && t.sub && t.sub.endpoint);
 if (!tokens.length) { console.log('Nenhum aparelho registrado.'); process.exit(0); }
 
 const cats = Object.fromEntries(catsSnap.docs.map(d => [d.id, d.data()]));
@@ -130,18 +143,14 @@ if (due('evening', cfg.evening)) {
 // Envio
 const dead = new Set();
 for (const n of out.slice(0, 6)) {
-  const res = await admin.messaging().sendEachForMulticast({
-    tokens: tokens.map(t => t.token),
-    data: n.data,
-    webpush: { headers: { Urgency: 'high', TTL: '7200' } }
-  });
-  res.responses.forEach((r, i) => {
-    if (!r.success) {
-      const code = r.error && r.error.code;
-      if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-argument' || code === 'messaging/invalid-registration-token') dead.add(i);
-      console.log('Falha:', code);
+  for (let i = 0; i < tokens.length; i++) {
+    try {
+      await webpush.sendNotification(tokens[i].sub, JSON.stringify(n.data), { TTL: 7200, urgency: 'high' });
+    } catch (e) {
+      console.log('Falha:', e.statusCode, (e.body || e.message || '').toString().slice(0, 160));
+      if (e.statusCode === 404 || e.statusCode === 410) dead.add(i);
     }
-  });
+  }
   sentNow[`${today}|${n.key}`] = Date.now();
   console.log('Enviada:', n.data.title);
 }

@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/**'
+      - '.github/workflows/notificacoes.yml'
 
 permissions:
   contents: write
@@ -24,7 +29,7 @@ jobs:
         with:
           node-version: 20
       - name: Instalar dependências
-        run: npm install --no-save --no-audit --no-fund firebase-admin@12
+        run: npm install --no-save --no-audit --no-fund firebase-admin@12 web-push@3
       - name: Enviar notificações
         env:
           FIREBASE_SA: ${{ secrets.FIREBASE_SA }}

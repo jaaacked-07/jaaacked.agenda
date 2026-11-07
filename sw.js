@@ -1,4 +1,4 @@
-const VERSION = 'agenda-v12';
+const VERSION = 'agenda-v13';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './favicon.png'];
 
 const FIREBASE_CONFIG = {
@@ -11,28 +11,25 @@ const FIREBASE_CONFIG = {
 };
 const USER = 'jaaacked';
 
-/* ---------- Notificações (Firebase Cloud Messaging) ---------- */
-try {
-  importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js', 'https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
-  firebase.initializeApp(FIREBASE_CONFIG);
-  firebase.messaging().onBackgroundMessage(payload => {
-    const d = payload.data || {};
-    if (d.badge !== undefined && self.navigator.setAppBadge) {
-      const n = parseInt(d.badge, 10) || 0;
-      (n ? self.navigator.setAppBadge(n) : self.navigator.clearAppBadge()).catch(() => {});
-    }
-    const opts = {
-      body: d.body || '',
-      icon: 'icon-192.png',
-      badge: 'favicon.png',
-      tag: d.tag || 'agenda',
-      renotify: true,
-      data: { id: d.id || '', date: d.date || '', start: d.start || '' }
-    };
-    if (d.id) opts.actions = d.id.includes('@') ? [{ action: 'done', title: 'Feito' }] : [{ action: 'done', title: 'Feito' }, { action: 'snooze', title: 'Adiar 1 dia' }];
-    return self.registration.showNotification(d.title || 'Agenda', opts);
-  });
-} catch (e) { /* sem rede na instalação: o app continua funcionando sem notificações */ }
+/* ---------- Notificações (Web Push padrão) ---------- */
+self.addEventListener('push', e => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (_) { d = { title: 'Agenda', body: e.data ? e.data.text() : '' }; }
+  if (d.badge !== undefined && self.navigator.setAppBadge) {
+    const n = parseInt(d.badge, 10) || 0;
+    (n ? self.navigator.setAppBadge(n) : self.navigator.clearAppBadge()).catch(() => {});
+  }
+  const opts = {
+    body: d.body || '',
+    icon: 'icon-192.png',
+    badge: 'favicon.png',
+    tag: d.tag || 'agenda',
+    renotify: true,
+    data: { id: d.id || '', date: d.date || '', start: d.start || '' }
+  };
+  if (d.id) opts.actions = d.id.includes('@') ? [{ action: 'done', title: 'Feito' }] : [{ action: 'done', title: 'Feito' }, { action: 'snooze', title: 'Adiar 1 dia' }];
+  e.waitUntil(self.registration.showNotification(d.title || 'Agenda', opts));
+});
 
 const addDays = (s, n) => { const [y, m, d] = s.split('-').map(Number); const x = new Date(y, m - 1, d + n); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
 function patchItem(id, fields) {

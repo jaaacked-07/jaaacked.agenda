@@ -1328,20 +1328,29 @@ const isStandalone = matchMedia('(display-mode: standalone)').matches || navigat
 function notifState(){
   if (!('Notification' in window) || !('serviceWorker' in navigator)) return isIOS && !isStandalone ? 'ios-install' : 'unsupported';
   if (isIOS && !isStandalone) return 'ios-install';
-  if (!VAPID_KEY || !FIREBASE_CONFIG) return 'pending-config';
+  if (!FIREBASE_CONFIG) return 'pending-config';
   if (Notification.permission === 'denied') return 'denied';
   return (Notification.permission === 'granted' && load('pushToken', null)) ? 'on' : 'off';
 }
-async function saveToken(token){
-  const id = token.replace(/[^A-Za-z0-9_-]/g,'').slice(-40);
-  const data = {token, ua: navigator.userAgent.slice(0,120), at: Date.now()};
+const fsREST = path => `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/${path}?key=${FIREBASE_CONFIG.apiKey}`;
+async function getPushPublicKey(){
+  try {
+    if (FB){ const d = await FB.fs.getDoc(FB.fs.doc(FB.db, 'users', USER, 'meta', 'vapid')); if (d.exists()) return d.data().publicKey; }
+  } catch(e){}
+  const r = await fetch(fsREST(`users/${USER}/meta/vapid`));
+  if (!r.ok) return null;
+  const j = await r.json(); return j.fields && j.fields.publicKey ? j.fields.publicKey.stringValue : null;
+}
+function b64ToBytes(b64){ const pad = '='.repeat((4 - b64.length % 4) % 4); const raw = atob((b64 + pad).replace(/-/g,'+').replace(/_/g,'/')); return Uint8Array.from(raw, c => c.charCodeAt(0)); }
+async function hashId(str){ const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)); return [...new Uint8Array(h)].slice(0,16).map(b=>b.toString(16).padStart(2,'0')).join(''); }
+async function saveSub(sub){
+  const json = JSON.stringify(sub), id = await hashId(sub.endpoint);
+  const data = {sub: json, ua: navigator.userAgent.slice(0,120), at: Date.now()};
   try {
     if (!FB) throw new Error('sem FB');
-    await Promise.race([FB.fs.setDoc(FB.fs.doc(FB.db, 'users', USER, 'tokens', id), data), new Promise((_,rej)=>setTimeout(()=>rej(new Error('tempo esgotado')), 8000))]);
+    await Promise.race([FB.fs.setDoc(FB.fs.doc(FB.db, 'users', USER, 'subs', id), data), new Promise((_,rej)=>setTimeout(()=>rej(new Error('tempo esgotado')), 8000))]);
   } catch(e){
-    // plano B: grava direto pela API do Firestore
-    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/users/${USER}/tokens/${id}?key=${FIREBASE_CONFIG.apiKey}`;
-    const r = await fetch(url, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({fields:{token:{stringValue:token}, ua:{stringValue:data.ua}, at:{integerValue:String(data.at)}}})});
+    const r = await fetch(fsREST(`users/${USER}/subs/${id}`), {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({fields:{sub:{stringValue:json}, ua:{stringValue:data.ua}, at:{integerValue:String(data.at)}}})});
     if (!r.ok) throw new Error('não salvou o aparelho (' + r.status + ')');
   }
   return id;
@@ -1349,40 +1358,38 @@ async function saveToken(token){
 async function enablePush(){
   const st = notifState();
   if (st==='ios-install'){ toast('No iPhone, instale o app pelo Safari (Compartilhar > Adicionar à Tela de Início) e ative por lá.'); return; }
-  if (st==='pending-config'){ toast('Falta a chave de notificações do Firebase.'); return; }
   if (st==='unsupported'){ toast('Este navegador não aceita notificações.'); return; }
   const perm = await Notification.requestPermission();
   if (perm !== 'granted'){ toast('Permissão negada. Libere as notificações nas configurações do aparelho.'); renderView(); return; }
   toast('Ativando…');
-  let step = 'carregar o Firebase';
+  let step = 'buscar a chave do servidor';
   try {
-    const V = '10.12.2';
-    const appMod = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
-    const msg = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-messaging.js`);
-    const app = FB ? FB.app : (appMod.getApps().find(a => a.name==='push') || appMod.initializeApp(FIREBASE_CONFIG, 'push'));
+    const pub = await getPushPublicKey();
+    if (!pub) throw new Error('o servidor de envio ainda está se preparando. Tente de novo em alguns minutos.');
     step = 'preparar o app';
     const reg = await navigator.serviceWorker.ready;
     step = 'registrar no serviço de notificações';
-    let token = null, lastErr = null;
-    for (let i = 0; i < 3 && !token; i++){  // no iPhone a 1ª tentativa às vezes falha
-      try { token = await msg.getToken(msg.getMessaging(app), {vapidKey: VAPID_KEY, serviceWorkerRegistration: reg}); }
-      catch(e){ lastErr = e; await new Promise(r => setTimeout(r, 1200)); }
+    let sub = await reg.pushManager.getSubscription();
+    if (sub){
+      const cur = sub.options && sub.options.applicationServerKey ? btoa(String.fromCharCode(...new Uint8Array(sub.options.applicationServerKey))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'') : '';
+      if (cur && cur !== pub){ await sub.unsubscribe(); sub = null; }
     }
-    if (!token) throw lastErr || new Error('sem token');
+    if (!sub) sub = await reg.pushManager.subscribe({userVisibleOnly: true, applicationServerKey: b64ToBytes(pub)});
     step = 'salvar este aparelho';
-    await saveToken(token);
-    store('pushToken', token); S.pushErr = '';
+    const id = await saveSub(sub);
+    store('pushToken', id); S.pushErr = '';
     toast('Notificações ativadas neste aparelho');
   } catch(e){
     console.error(e);
-    S.pushErr = `Falhou ao ${step}: ${e && e.code ? e.code + ' · ' : ''}${(e && e.message) || e}`.slice(0, 400);
+    S.pushErr = `Falhou ao ${step}: ${e && e.name && e.name!=='Error' ? e.name + ' · ' : ''}${(e && e.message) || e}`.slice(0, 400);
     toast('Não foi possível ativar. O motivo aparece em Ajustes.');
   }
   renderView();
 }
 async function disablePush(){
   const tk = load('pushToken', null);
-  if (tk && FB) await FB.fs.deleteDoc(FB.fs.doc(FB.db, 'users', USER, 'tokens', tk.replace(/[^A-Za-z0-9_-]/g,'').slice(-40))).catch(()=>{});
+  if (tk && FB) await FB.fs.deleteDoc(FB.fs.doc(FB.db, 'users', USER, 'subs', tk)).catch(()=>{});
+  try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); } catch(e){}
   localStorage.removeItem(LS('pushToken')); toast('Notificações desativadas neste aparelho'); renderView();
 }
 function saveNotif(patch){
