@@ -1,4 +1,4 @@
-const VERSION = 'agenda-v8';
+const VERSION = 'agenda-v9';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './favicon.png'];
 
 const FIREBASE_CONFIG = {
@@ -29,7 +29,7 @@ try {
       renotify: true,
       data: { id: d.id || '', date: d.date || '', start: d.start || '' }
     };
-    if (d.id) opts.actions = [{ action: 'done', title: 'Feito' }, { action: 'snooze', title: 'Adiar 1 dia' }];
+    if (d.id) opts.actions = d.id.includes('@') ? [{ action: 'done', title: 'Feito' }] : [{ action: 'done', title: 'Feito' }, { action: 'snooze', title: 'Adiar 1 dia' }];
     return self.registration.showNotification(d.title || 'Agenda', opts);
   });
 } catch (e) { /* sem rede na instalação: o app continua funcionando sem notificações */ }
@@ -48,6 +48,13 @@ function patchItem(id, fields) {
 self.addEventListener('notificationclick', e => {
   const n = e.notification, d = n.data || {};
   n.close();
+  if (e.action === 'done' && d.id && d.id.includes('@')) {
+    // ocorrência de um item que se repete: marca só aquele dia
+    const [sid, ds] = d.id.split('@');
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/users/${USER}/items/${sid}?updateMask.fieldPaths=${encodeURIComponent('doneDates.`' + ds + '`')}&updateMask.fieldPaths=updated&key=${FIREBASE_CONFIG.apiKey}`;
+    e.waitUntil(fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { doneDates: { mapValue: { fields: { [ds]: { booleanValue: true } } } }, updated: { integerValue: String(Date.now()) } } }) }));
+    return;
+  }
   if (e.action === 'done' && d.id) { e.waitUntil(patchItem(d.id, { done: true, updated: Date.now() })); return; }
   if (e.action === 'snooze' && d.id && d.date) {
     const f = { date: addDays(d.date, 1), updated: Date.now() };

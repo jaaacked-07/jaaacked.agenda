@@ -39,7 +39,31 @@ if (!tokens.length) { console.log('Nenhum aparelho registrado.'); process.exit(0
 const cats = Object.fromEntries(catsSnap.docs.map(d => [d.id, d.data()]));
 const short = id => { const c = cats[id] || { name: '' }; return (c.short && c.short.trim()) || (c.name || '').split(/[\s·]+/)[0].slice(0, 9); };
 const muted = new Set(cfg.muted || []);
-const items = itemsSnap.docs.map(d => d.data()).filter(it => it && it.date && !muted.has(it.cat) && it.alert !== 'nao');
+const dow = s => { const [y, m, d] = s.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d)).getUTCDay(); };
+function repMatches(it, ds) {
+  const r = it.repeat, w = dow(ds), days = (r.days && r.days.length) ? r.days : [dow(it.date)];
+  switch (r.freq) {
+    case 'daily': return true;
+    case 'weekdays': return w >= 1 && w <= 5;
+    case 'weekly': return days.includes(w);
+    case 'biweekly': { if (!days.includes(w)) return false; const w0 = addDays(it.date, -dow(it.date)); return Math.floor(diff(ds, w0) / 7) % 2 === 0; }
+    case 'monthly': return ds.slice(8) === it.date.slice(8);
+    case 'yearly': return ds.slice(5) === it.date.slice(5);
+  }
+  return false;
+}
+// itens que se repetem viram ocorrências na janela de alguns dias ao redor de hoje
+function expand(it) {
+  if (!it.repeat || !it.repeat.freq) return [it];
+  const out = [], ex = new Set(it.exDates || []);
+  for (let i = -3; i <= 4; i++) {
+    const ds = addDays(today, i);
+    if (ds < it.date || (it.repeat.until && ds > it.repeat.until) || ex.has(ds) || !repMatches(it, ds)) continue;
+    out.push({ ...it, id: it.id + '@' + ds, sid: it.id, date: ds, start: '', done: !!(it.doneDates || {})[ds], occ: true });
+  }
+  return out;
+}
+const items = itemsSnap.docs.map(d => d.data()).filter(it => it && it.date && !muted.has(it.cat) && it.alert !== 'nao').flatMap(expand);
 
 const log = logDoc.exists ? (logDoc.data().sent || {}) : {};
 const sentNow = {};
@@ -49,7 +73,7 @@ const line = it => clip(`${short(it.cat)} · ${it.note || (it.start ? 'até ' + 
 const pendingOf = it => !it.done && it.type !== 'aviso';
 
 const todayItems = items.filter(it => it.date === today && !it.done).sort(order);
-const late = items.filter(it => pendingOf(it) && it.date < today && it.date >= addDays(today, -30)).sort((a, b) => a.date.localeCompare(b.date));
+const late = items.filter(it => pendingOf(it) && it.date < today && it.date >= addDays(today, it.occ ? -2 : -30)).sort((a, b) => a.date.localeCompare(b.date));
 const pending = [...items.filter(it => it.date === today && pendingOf(it)).sort(order), ...late];
 const badge = pending.length;
 
@@ -57,13 +81,15 @@ const out = [];
 const due = (key, hhmm) => { const m = toMin(hhmm); return m !== null && now.min >= m && now.min - m <= WINDOW && !log[`${today}|${key}`]; };
 const push = (key, it, title, body) => { out.push({ key, data: { title: clip(title, 90), body, tag: key, id: it ? it.id : '', date: it ? it.date : '', start: it ? (it.start || '') : '', badge: String(badge) } }); };
 
-// 1. Resumo do dia: um compromisso + quantos mais
-if (due('morning', cfg.morning) && todayItems.length) {
-  const it = todayItems[0], more = todayItems.length - 1;
-  let body = line(it);
+// 1. Resumo do dia: um compromisso + quantos mais (inclui prazos que abrem hoje)
+const opening = items.filter(it => it.start === today && !it.done);
+const morningList = [...todayItems, ...opening];
+if (due('morning', cfg.morning) && morningList.length) {
+  const it = morningList[0], more = morningList.length - 1, opens = it.start === today;
+  let body = opens ? `${short(it.cat)} · abre hoje, prazo até ${dateTag(it.date)}` : line(it);
   if (more > 0) body += `\nMais ${more} ${plural(more, 'compromisso agendado', 'compromissos agendados')} para hoje`;
   if (late.length) body += `\n${late.length} ${plural(late.length, 'pendente', 'pendentes')} de dias anteriores`;
-  push('morning', it, `Hoje: ${it.title}`, body);
+  push('morning', it, `${opens ? 'Abre hoje' : 'Hoje'}: ${it.title}`, body);
 }
 
 // 2. Lembretes de pendências: só se houver algo pendente; alternam entre os itens

@@ -19,7 +19,7 @@
 <style>
 :root{
   --bg:#F6F7F8; --surface:#FFFFFF; --surface-2:#F0F1F3; --line:#E5E7EA; --line-2:#D6D9DE;
-  --text:#1D2025; --muted:#686D75; --faint:#A2A7AE; --past:#E9EBEE; --past-ink:#9AA0A8;
+  --text:#1D2025; --muted:#686D75; --faint:#A2A7AE; --past:#F1F2F4; --past-ink:#B3B8BF;
   --accent:#7A2E3B; --accent-ink:#FFFFFF; --danger:#A23B3B;
   --shadow:0 1px 2px rgba(20,24,30,.04),0 6px 20px rgba(20,24,30,.05);
   --shadow-lg:0 12px 40px rgba(20,24,30,.14);
@@ -237,7 +237,8 @@ main{display:flex;flex-direction:column;min-width:0;height:100dvh}
 .cell.past{background:var(--past)}
 .cell.past:hover{background:var(--past)}
 .cell.past .dn{color:var(--past-ink)}
-.cell.past .pill:not(.done){opacity:.78}
+.cell.past .pill{filter:saturate(.35);opacity:.6}
+.cell.past .pill.done{opacity:.4}
 .cell.today{background:color-mix(in srgb,var(--accent) 6%,var(--surface));box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--accent) 55%,transparent)}
 .cell .dn{font-size:12.5px;font-weight:500;width:24px;height:24px;display:grid;place-items:center;border-radius:50%;margin-bottom:1px;font-variant-numeric:tabular-nums}
 .cell.today .dn{background:var(--accent);color:var(--accent-ink)}
@@ -355,8 +356,9 @@ textarea.in{height:auto;min-height:84px;padding:10px 12px;resize:vertical;line-h
 .srow .sub{font-size:12.5px;color:var(--muted)}
 .cdot{width:22px;height:22px;border-radius:7px;background:var(--c);flex:none;cursor:pointer;border:0}
 .srow input.in{height:36px}
-.palette{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.palette{display:grid;grid-template-columns:repeat(10,30px);gap:8px;margin-top:4px}
 .palette button{width:30px;height:30px;border-radius:9px;background:var(--c);position:relative}
+@media (max-width:480px){ .palette{grid-template-columns:repeat(7,30px)} }
 .palette button.on::after{content:"";position:absolute;inset:-4px;border-radius:12px;border:1.5px solid var(--text)}
 .palette button.used::before{content:"";position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:rgba(255,255,255,.9)}
 .pal-hint{font-size:11.5px;color:var(--faint);margin-top:8px;display:flex;align-items:center;gap:6px}
@@ -506,7 +508,7 @@ const FIREBASE_CONFIG_REAL = {
 const FIREBASE_CONFIG = (location.hostname==="localhost") ? null : FIREBASE_CONFIG_REAL;
 const USER = 'jaaacked';
 /* Chave pública de notificações (Firebase > Configurações do projeto > Cloud Messaging > Web Push) */
-const VAPID_KEY = '';
+const VAPID_KEY = 'BKVhnmci8JkM_pX5QLlsrSKVZknKUtsTrnwak0ei-TzVVLTygG4aHt844XVeUTm6OHlzuk7PLGR1RYNZse2FeGg';
 const NOTIF_DEFAULT = {enabled:true, morning:'07:30', evening:'20:00', ahead:'09:00', reminders:['11:00','15:00','18:00','21:00'], muted:[]};
 const LS = k => 'agenda.' + k;
 
@@ -525,16 +527,18 @@ const I = {
 };
 
 /* ---------- Paleta ---------- */
-const PALETTE = ['#3F6E7D','#7B4F6F','#6B8A68','#B06A4B','#8A3B4A','#B08B3F','#596372','#5A6F9E','#A9737C','#4F7F78','#8C6A4F','#6F6A9A'];
+const PALETTE = ['#2F6F8F','#3B5BA9','#4A7BB7','#5B4BA6','#7A3E8E','#A23B72','#B4415A','#8A2E3B','#C0503A','#D2762B','#C29A1E','#7A8F2A','#3D8B4F','#1F8A70','#20858F','#A0627D','#8B6B4A','#6B5B4E','#6D7F99','#4E5D6C'];
+/* cores antigas (mais apagadas) -> novas, mais distintas */
+const OLD_COLORS = {'#3F6E7D':'#2F6F8F','#7B4F6F':'#7A3E8E','#6B8A68':'#1F8A70','#B06A4B':'#C0503A','#8A3B4A':'#8A2E3B','#B08B3F':'#C29A1E','#596372':'#4A7BB7','#5A6F9E':'#3B5BA9','#A9737C':'#B4415A','#4F7F78':'#20858F','#8C6A4F':'#8B6B4A','#6F6A9A':'#5B4BA6'};
 
 const DEFAULT_CATS = [
-  {id:'enare', name:'ENARE', color:'#3F6E7D', order:1},
-  {id:'uerj', name:'UERJ', color:'#7B4F6F', order:2},
-  {id:'viv', name:'VIV · Vila Verde', color:'#6B8A68', order:3},
-  {id:'huv', name:'HUV Vassouras', color:'#B06A4B', order:4},
-  {id:'crm', name:'CRM', color:'#8A3B4A', order:5},
-  {id:'formatura', name:'Formatura', color:'#B08B3F', order:6},
-  {id:'pessoal', name:'Pessoal', color:'#596372', order:7}
+  {id:'enare', name:'ENARE', color:'#2F6F8F', order:1},
+  {id:'uerj', name:'UERJ', color:'#7A3E8E', order:2},
+  {id:'viv', name:'VIV · Vila Verde', color:'#1F8A70', order:3},
+  {id:'huv', name:'HUV Vassouras', color:'#C0503A', order:4},
+  {id:'crm', name:'CRM', color:'#8A2E3B', order:5},
+  {id:'formatura', name:'Formatura', color:'#C29A1E', order:6},
+  {id:'pessoal', name:'Pessoal', color:'#4A7BB7', order:7}
 ];
 
 /* [data(fim), início|null, categoria, tipo, título, observação, concluído, hora] */
@@ -637,6 +641,11 @@ function buildSeed(){
   return o;
 }
 /* Migração única: separa observações longas já salvas (idempotente, funciona em todos os aparelhos) */
+let migratedCats = false;
+function migrateCatColors(){
+  if (migratedCats || !S.cats) return; migratedCats = true;
+  Object.values(S.cats).forEach(c => { const n = OLD_COLORS[(c.color||'').toUpperCase()] || OLD_COLORS[c.color]; if (n) putCat({...c, color:n}); });
+}
 let migrated = false;
 function migrateNotes(){
   if (migrated || !S.items) return; migrated = true;
@@ -702,10 +711,75 @@ S.cursor.setDate(1);
 
 function catsArr(){ return Object.values(S.cats||{}).sort((a,b)=>(a.order||0)-(b.order||0) || a.name.localeCompare(b.name)); }
 function cat(id){ return (S.cats||{})[id] || {id, name:'Sem categoria', color:'#8A847D'}; }
-function itemsArr(){ return Object.values(S.items||{}); }
+/* ---------- Repetição ---------- */
+const REP_LABEL = {daily:'Todo dia', weekdays:'Dias úteis (seg a sex)', weekly:'Toda semana', biweekly:'A cada 2 semanas', monthly:'Todo mês', yearly:'Todo ano'};
+const SEM_FULL_PL = ['domingos','segundas','terças','quartas','quintas','sextas','sábados'];
+function repDays(it){ const r = it.repeat||{}; return (r.days && r.days.length) ? r.days : [parse(it.date).getDay()]; }
+function repText(it){
+  const r = it.repeat; if (!r || !r.freq) return '';
+  let t = REP_LABEL[r.freq];
+  if (r.freq==='weekly' || r.freq==='biweekly'){ const d = repDays(it).slice().sort(); t = (r.freq==='weekly'?'Toda semana':'A cada 2 semanas') + ', ' + (d.length===7?'todos os dias':d.map(x=>SEM_FULL_PL[x]).join(', ')); }
+  if (r.freq==='monthly') t += ', dia '+parse(it.date).getDate();
+  if (r.freq==='yearly') t += ', '+ddmm(it.date);
+  if (r.until) t += ' · até '+dateTag(r.until);
+  return t;
+}
+function repMatches(it, d, ds){
+  const r = it.repeat, a = parse(it.date);
+  switch (r.freq){
+    case 'daily': return true;
+    case 'weekdays': return d.getDay()>=1 && d.getDay()<=5;
+    case 'weekly': return repDays(it).includes(d.getDay());
+    case 'biweekly': { if (!repDays(it).includes(d.getDay())) return false; const w0 = addDays(a, -a.getDay()); return Math.floor(diffDays(ds, iso(w0))/7) % 2 === 0; }
+    case 'monthly': return d.getDate() === a.getDate();
+    case 'yearly': return d.getDate() === a.getDate() && d.getMonth() === a.getMonth();
+  }
+  return false;
+}
+function occOf(series, ds){
+  const {repeat, doneDates, exDates, ...base} = series;
+  return {...base, repeat, id: series.id+'@'+ds, sid: series.id, date: ds, start:'', done: !!(doneDates||{})[ds], _occ:true};
+}
+function expandSeries(it){
+  const out = [], t = new Date();
+  let d = parse(it.date); const lo = addDays(t, -60); if (d < lo) d = lo;
+  const end = it.repeat.until ? parse(it.repeat.until) : addDays(t, 400);
+  const lim = addDays(t, 400), stop = end < lim ? end : lim, ex = new Set(it.exDates||[]);
+  for (; d <= stop; d = addDays(d, 1)){
+    const ds = iso(d);
+    if (ds < it.date || ex.has(ds)) continue;
+    if (repMatches(it, d, ds)) out.push(occOf(it, ds));
+  }
+  return out;
+}
+let _arr = null;
+function itemsArr(){
+  if (_arr) return _arr;
+  const out = [];
+  for (const it of Object.values(S.items||{})){ if (it.repeat && it.repeat.freq) out.push(...expandSeries(it)); else out.push(it); }
+  return (_arr = out);
+}
+function getItem(id){
+  if (!id) return null;
+  if (id.includes('@')){ const [sid, ds] = id.split('@'); const s0 = S.items[sid]; return s0 ? occOf(s0, ds) : null; }
+  return S.items[id] || null;
+}
+/* move um item (ou uma ocorrência de repetição) para outra data; devolve função de desfazer */
+function moveItem(it, newDate){
+  if (it._occ){
+    const series = S.items[it.sid], old = {...series};
+    const copy = {...it}; ['_occ','sid','repeat'].forEach(k=>delete copy[k]);
+    copy.id = uid(); copy.date = newDate; copy.start = ''; copy.done = false;
+    putItem({...series, exDates:[...(series.exDates||[]), it.date]}); putItem(copy);
+    return () => { putItem(old); delItem(copy.id); };
+  }
+  const old = {...it}, delta = diffDays(newDate, it.date);
+  putItem({...it, date:newDate, start: it.start ? iso(addDays(parse(it.start), delta)) : ''});
+  return () => putItem(old);
+}
 function visible(it){ return !S.prefs.hidden.includes(it.cat); }
 function savePrefs(){ store('prefs', S.prefs); }
-function persist(){ store('items', S.items); store('cats', S.cats); }
+function persist(){ _arr = null; store('items', S.items); store('cats', S.cats); }
 
 /* ---------- Sincronização (Firebase) ---------- */
 let FB = null;
@@ -742,7 +816,7 @@ async function initSync(){
     }, () => setSync('offline'));
     fs.onSnapshot(catsCol, snap => {
       const o = {}; snap.forEach(d => o[d.id] = d.data());
-      if (Object.keys(o).length){ S.cats = o; persist(); render(); }
+      if (Object.keys(o).length){ S.cats = o; persist(); render(); if (!snap.metadata.fromCache) migrateCatColors(); }
     });
     window.addEventListener('online', ()=>setSync('ok'));
     window.addEventListener('offline', ()=>setSync('offline'));
@@ -752,6 +826,11 @@ async function initSync(){
 }
 function setSync(s){ S.sync = s; renderSync(); }
 function putItem(it){
+  if (it._occ){
+    const series = S.items[it.sid]; if (!series) return;
+    const dd = {...(series.doneDates||{})}; if (it.done) dd[it.date] = true; else delete dd[it.date];
+    return putItem({...series, doneDates: dd});
+  }
   it.updated = Date.now();
   S.items[it.id] = it; persist(); render();
   if (FB) FB.fs.setDoc(FB.fs.doc(FB.itemsCol, it.id), it).catch(()=>setSync('offline'));
@@ -783,7 +862,7 @@ function occ(day, opts={}){
   return out.sort((a,b)=> rank[a.kind]-rank[b.kind] || (a.it.time||'99').localeCompare(b.it.time||'99') || (a.it.done-b.it.done) || a.it.title.localeCompare(b.it.title));
 }
 const isOpenPrazo = it => it.type==='prazo' && !it.done;
-const isLate = it => !it.done && it.date < todayIso();
+const isLate = it => !it.done && it.date < todayIso() && !(it._occ && diffDays(todayIso(), it.date) > 2);
 
 /* ---------- Render: sidebar / tabs ---------- */
 const VIEWS = [
@@ -873,7 +952,8 @@ function rowHTML(it, opts={}){
   let meta = [`<span class="cat">${esc(c.name)}</span>`, typeLbl];
   if (it.start) meta.push(ddmm(it.start)+' → '+ddmm(it.date));
   if (it.time) meta.push(it.time + (it.timeEnd?'–'+it.timeEnd:''));
-  if (kind==='start') meta.unshift('Começa hoje');
+  if (it._occ) meta.push('Repete');
+  if (kind==='start') meta.unshift(it.start===t ? 'Abre hoje' : 'Abre em '+ddmm(it.start)+', prazo até '+ddmm(it.date));
   if (kind==='mid') meta.unshift('Em andamento');
   const dn = diffDays(it.date, t);
   const soon = !it.done && dn>=0 && dn<=3 && kind==='main' && it.type!=='aviso';
@@ -975,22 +1055,29 @@ function vPrazos(){
   let h = `<div class="wrap">${chipsHTML()}`;
   if (!list.length) return h + `<div class="list" style="margin-top:16px"><div class="empty">Nenhum prazo cadastrado.</div></div></div>`;
   const groups = {};
-  list.forEach(it => { const k = isLate(it) ? 'late' : it.date.slice(0,7); (groups[k] = groups[k]||[]).push(it); });
+  list.forEach(it => {
+    const k = isLate(it) ? 'late' : it.date.slice(0,7); (groups[k] = groups[k]||[]).push({it});
+    if (it.start && it.start.slice(0,7) !== it.date.slice(0,7) && k !== 'late') (groups[it.start.slice(0,7)] = groups[it.start.slice(0,7)]||[]).push({it, kind:'start'});
+  });
+  Object.values(groups).forEach(g => g.sort((a,b)=> (a.kind==='start'?a.it.start:a.it.date).localeCompare(b.kind==='start'?b.it.start:b.it.date)));
   const keys = Object.keys(groups).sort((a,b)=> a==='late'?-1:b==='late'?1: a.localeCompare(b));
   keys.forEach(k => {
     const open = S.openMonths.has(k);
     const label = k==='late' ? '<span style="color:var(--danger)">Pendentes de dias anteriores</span>' : (()=>{ const [y,m]=k.split('-'); return cap(MES[+m-1])+' '+y; })();
-    const done = groups[k].filter(i=>i.done).length;
-    const cnt = k==='late' ? `${groups[k].length}` : `${done}/${groups[k].length} feitos`;
+    const main = groups[k].filter(x=>!x.kind);
+    const done = main.filter(x=>x.it.done).length;
+    const cnt = k==='late' ? `${main.length}` : `${done}/${main.length} feitos`;
     h += `<button class="mh ${open?'open':''}" data-month="${k}">${CHEV.replace('class="ico chev"','class="ico chev"')}${label}${k===curKey?'<span class="now-tag">Mês atual</span>':''}<span class="cnt">${cnt}</span></button>`;
-    if (open) h += `<div class="list tint">${groups[k].map(it=>rowHTML(it,{when: whenLabel(it.date)})).join('')}</div>`;
+    if (open) h += `<div class="list tint">${groups[k].map(x=> x.kind==='start' ? rowHTML(x.it,{kind:'start', when:'Abre '+whenLabel(x.it.start)}) : rowHTML(x.it,{when: whenLabel(x.it.date)})).join('')}</div>`;
   });
   return h + '</div>';
 }
 
 function vBusca(){
   const q = S.q.trim().toLowerCase();
-  const list = itemsArr().filter(it => (it.title+' '+(it.note||'')+' '+(it.more||'')+' '+cat(it.cat).name).toLowerCase().includes(q)).sort((a,b)=>a.date.localeCompare(b.date));
+  const t = todayIso(), seen = new Set();
+  const list = itemsArr().filter(it => (it.title+' '+(it.note||'')+' '+(it.more||'')+' '+cat(it.cat).name).toLowerCase().includes(q)).sort((a,b)=>a.date.localeCompare(b.date))
+    .filter(it => { if (!it._occ) return true; if (it.date < t || seen.has(it.sid)) return false; seen.add(it.sid); return true; });
   return `<div class="wrap"><div class="sec"><div class="sec-h"><h3>Resultados</h3><span>${list.length}</span></div><div class="list">${list.length?list.map(it=>rowHTML(it,{when:whenLabel(it.date)})).join(''):'<div class="empty">Nada encontrado.</div>'}</div></div></div>`;
 }
 
@@ -1069,11 +1156,16 @@ function openEditor(id, preset={}){
       <div class="f"><label class="l">Tipo</label><div class="seg full" id="eType"><button type="button" data-t="evento" class="${it.type==='evento'?'on':''}">Compromisso</button><button type="button" data-t="prazo" class="${it.type==='prazo'?'on':''}">Prazo</button><button type="button" data-t="aviso" class="${it.type==='aviso'?'on':''}">Aviso</button></div>
         <div class="hint" id="eTypeHint"></div></div>
       <div class="f">
-        <div class="toggle ${ranged?'on':''}" id="eRange"><span>Vários dias</span><div class="sw2"></div></div>
+        <div class="toggle ${ranged?'on':''} ${it.repeat&&it.repeat.freq?'hidden':''}" id="eRange"><span>Vários dias</span><div class="sw2"></div></div>
         <div class="f2" style="margin-top:6px">
           <div id="eStartWrap" class="${ranged?'':'hidden'}"><label class="l">Início</label><input type="date" class="in" id="eStart" value="${it.start||''}"></div>
           <div><label class="l" id="eDateLbl">${ranged?'Fim':'Data'}</label><input type="date" class="in" id="eDate" value="${it.date}"></div>
         </div>
+      </div>
+      <div class="f"><label class="l">Repetir?</label>
+        <select class="in" id="eRep">${[['','Não repete'],['daily','Todo dia'],['weekdays','Dias úteis (seg a sex)'],['weekly','Toda semana'],['biweekly','A cada 2 semanas'],['monthly','Todo mês (mesmo dia)'],['yearly','Todo ano (mesma data)']].map(([v,l])=>`<option value="${v}" ${((it.repeat||{}).freq||'')===v?'selected':''}>${l}</option>`).join('')}</select>
+        <div id="eRepDaysWrap" class="${['weekly','biweekly'].includes((it.repeat||{}).freq)?'':'hidden'}" style="margin-top:10px"><div class="seg full" id="eRepDays">${['D','S','T','Q','Q','S','S'].map((l,i)=>`<button type="button" data-wd="${i}" class="${repDays(it).includes(i)?'on':''}" title="${SEM[i]}">${l}</button>`).join('')}</div></div>
+        <div id="eRepUntilWrap" class="${(it.repeat||{}).freq?'':'hidden'}" style="margin-top:10px"><label class="l">Até (opcional)</label><input type="date" class="in" id="eRepUntil" value="${(it.repeat||{}).until||''}"><div class="hint">Em branco, repete sem data para acabar.</div></div>
       </div>
       <div class="f">
         <div class="toggle ${allDay?'on':''}" id="eAll"><span>Dia inteiro</span><div class="sw2"></div></div>
@@ -1084,8 +1176,7 @@ function openEditor(id, preset={}){
       </div>
       <div class="f"><label class="l">Observação</label><textarea class="in" id="eNote" rows="2" style="min-height:58px" placeholder="Curta e direta. Aparece no calendário e nas listas.">${esc(it.note)}</textarea></div>
       <div class="f"><label class="l">Algo mais? <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--faint);margin-left:4px">não aparece no calendário</span></label><textarea class="in" id="eMore" placeholder="Links, documentos, detalhes…">${esc(it.more||'')}</textarea><div class="links" id="eLinks"></div></div>
-      <div class="f"><label class="l">Avisar no celular</label><div class="seg full" id="eAlert">${[['','Padrão'],['1d','1 dia antes'],['3d','3 dias antes'],['nao','Não avisar']].map(([v,l])=>`<button type="button" data-a="${v}" class="${(it.alert||'')===v?'on':''}">${l}</button>`).join('')}</div></div>
-      <div class="f" id="eDoneWrap"><div class="toggle ${it.done?'on':''}" id="eDone"><span>Feito</span><div class="sw2"></div></div></div>
+      <div class="f ${(it.repeat||{}).freq?'hidden':''}" id="eDoneWrap"><div class="toggle ${it.done?'on':''}" id="eDone"><span>Feito</span><div class="sw2"></div></div></div>
     </div>
     <div class="m-f">${ex?'<button class="btn-text danger" data-del>Excluir</button><button class="btn-text" data-dup>Duplicar</button>':''}<span class="sp"></span><span class="kbd d-only">Shift+Enter para salvar</span><button class="btn-text" data-x>Cancelar</button><button class="btn-primary" data-save>Salvar</button></div>`);
   const q = sel => s.querySelector(sel);
@@ -1109,7 +1200,17 @@ function openEditor(id, preset={}){
   q('#eNcName').addEventListener('keydown', e => { if (e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); createCat(); } });
   const drawLinks = () => { const urls = ((q('#eNote').value+' '+q('#eMore').value).match(/https?:\/\/[^\s)]+/g)||[]); q('#eLinks').innerHTML = urls.map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener">Abrir ${esc(u.replace(/^https?:\/\/(www\.)?/,'').split('/')[0])}</a>`).join(''); };
   drawLinks(); q('#eNote').addEventListener('input', drawLinks); q('#eMore').addEventListener('input', drawLinks);
-  q('#eAlert').onclick = e => { const b = e.target.closest('[data-a]'); if(!b) return; it.alert = b.dataset.a; q('#eAlert').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); };
+  let repWd = new Set(repDays(it));
+  q('#eRep').onchange = () => {
+    const v = q('#eRep').value;
+    q('#eRepDaysWrap').classList.toggle('hidden', !['weekly','biweekly'].includes(v));
+    q('#eRepUntilWrap').classList.toggle('hidden', !v);
+    q('#eRange').classList.toggle('hidden', !!v);
+    if (v){ q('#eRange').classList.remove('on'); q('#eStartWrap').classList.add('hidden'); q('#eDateLbl').textContent = 'Começa em'; } else q('#eDateLbl').textContent = 'Data';
+  };
+  q('#eRepDays').onclick = e => { const b = e.target.closest('[data-wd]'); if(!b) return; const d = +b.dataset.wd; repWd.has(d) ? repWd.delete(d) : repWd.add(d); if (!repWd.size) repWd.add(d); q('#eRepDays').querySelectorAll('button').forEach(x=>x.classList.toggle('on', repWd.has(+x.dataset.wd))); };
+  q('#eDate').addEventListener('change', () => { if (!it.repeat && q('#eRep').value && ['weekly','biweekly'].includes(q('#eRep').value) && repWd.size===1){ repWd = new Set([parse(q('#eDate').value).getDay()]); q('#eRepDays').querySelectorAll('button').forEach(x=>x.classList.toggle('on', repWd.has(+x.dataset.wd))); } });
+  if ((it.repeat||{}).freq) q('#eDateLbl').textContent = 'Começa em';
   q('#eType').onclick = e => { const b = e.target.closest('[data-t]'); if(!b) return; it.type = b.dataset.t; q('#eType').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); setHint(); };
   q('#eRange').onclick = () => { const on = !q('#eRange').classList.contains('on'); q('#eRange').classList.toggle('on', on); q('#eStartWrap').classList.toggle('hidden', !on); q('#eDateLbl').textContent = on?'Fim':'Data'; if (on && !q('#eStart').value) q('#eStart').value = q('#eDate').value; };
   q('#eAll').onclick = () => { const on = !q('#eAll').classList.contains('on'); q('#eAll').classList.toggle('on', on); q('#eTimes').classList.toggle('hidden', on); };
@@ -1123,12 +1224,17 @@ function openEditor(id, preset={}){
     if (start && start > date){ toast('A data de início precisa ser antes do fim.'); return; }
     if (start === date) start = '';
     const allD = q('#eAll').classList.contains('on');
-    const out = {...it, title, date, start, time: allD?'':q('#eTime').value, timeEnd: allD?'':q('#eTimeEnd').value, note:q('#eNote').value.trim(), more:q('#eMore').value.trim(), done: q('#eDone').classList.contains('on')};
+    const rf = q('#eRep').value;
+    if (rf) start = '';
+    const repeat = rf ? {freq: rf, ...(['weekly','biweekly'].includes(rf) ? {days:[...repWd].sort()} : {}), ...(q('#eRepUntil').value ? {until:q('#eRepUntil').value} : {})} : null;
+    if (!rf) { delete it.doneDates; delete it.exDates; }
+    const out = {...it, repeat, title, date, start, time: allD?'':q('#eTime').value, timeEnd: allD?'':q('#eTimeEnd').value, note:q('#eNote').value.trim(), more:q('#eMore').value.trim(), done: rf ? false : q('#eDone').classList.contains('on')};
+    if (!rf) delete out.repeat;
     putItem(out); closeModal(); toast(ex?'Alterações salvas':'Compromisso criado');
   };
   q('[data-save]').onclick = save;
   if (ex) q('[data-dup]').onclick = () => { closeModal(true); openEditor(null, {copy:{...ex, id:uid(), done:false, title:ex.title}}); };
-  if (ex) q('[data-del]').onclick = () => confirmBox('Excluir compromisso', `"${esc(ex.title)}" será removido de todos os aparelhos.`, 'Excluir', () => { const old = delItem(ex.id); toast('Compromisso excluído', 'Desfazer', () => putItem(old)); });
+  if (ex) q('[data-del]').onclick = () => confirmBox('Excluir compromisso', `"${esc(ex.title)}" será removido de todos os aparelhos${ex.repeat&&ex.repeat.freq?', em todas as repetições':''}.`, 'Excluir', () => { const old = delItem(ex.id); toast('Compromisso excluído', 'Desfazer', () => putItem(old)); });
   s.addEventListener('keydown', e => {
     if (e.key==='Enter' && e.shiftKey){ e.preventDefault(); save(); }
     else if (e.key==='Enter' && e.target.tagName==='INPUT' && e.target.id!=='eNcName'){ e.preventDefault(); }
@@ -1150,9 +1256,9 @@ function catPreviewHTML(name, color, short){
   </div>`;
 }
 function linkify(txt){ return esc(txt).replace(/https?:\/\/[^\s)<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u.replace(/^https?:\/\/(www\.)?/,'').slice(0,60)}${u.length>70?'…':''}</a>`); }
-function snooze(it, days=1){ return {...it, date: iso(addDays(parse(it.date), days)), start: it.start ? iso(addDays(parse(it.start), days)) : ''}; }
+function doSnooze(it){ const nd = iso(addDays(parse(it.date), 1)); const undo = moveItem(it, nd); toast('Adiado para '+dateTag(nd), 'Desfazer', undo); }
 function openDetail(id){
-  const it = S.items[id]; if (!it) return;
+  const it = getItem(id); if (!it) return;
   const c = cat(it.cat), t = todayIso(), late = isLate(it);
   const typeLbl = {prazo:'Prazo', aviso:'Aviso', evento:'Compromisso'}[it.type] || '';
   const when = it.start
@@ -1160,28 +1266,28 @@ function openDetail(id){
     : `${dateTag(it.date)}<small>${relLabel(it.date)}</small>`;
   const hora = it.time ? `<dt>Horário</dt><dd>${it.time}${it.timeEnd?' às '+it.timeEnd:''}</dd>` : '';
   const st = it.done ? '<span class="st ok"><i></i>Feito</span>' : late ? '<span class="st late"><i></i>Pendente, atrasado</span>' : '<span class="st"><i></i>Pendente</span>';
-  const alertLbl = {nao:'Não avisar', '1d':'1 dia antes', '3d':'3 dias antes'}[it.alert] || 'Padrão';
   const s = openModal(`
     <div class="m-h"><span class="dt-cat" style="--c:${c.color}"><i></i>${esc(c.name)}</span><button class="icon-btn" data-x aria-label="Fechar">${I.x}</button></div>
     <div class="m-b">
       <h2 class="dt-title ${it.done?'done':''}">${esc(it.title)}</h2>
-      <dl class="dt-grid"><dt>Data</dt><dd>${when}</dd>${hora}<dt>Tipo</dt><dd>${typeLbl}</dd><dt>Situação</dt><dd>${st}</dd><dt>Avisos</dt><dd>${alertLbl}</dd></dl>
+      <dl class="dt-grid"><dt>Data</dt><dd>${when}</dd>${hora}<dt>Tipo</dt><dd>${typeLbl}</dd><dt>Situação</dt><dd>${st}</dd>${it.repeat&&it.repeat.freq?`<dt>Repete</dt><dd>${repText(it)}</dd>`:''}</dl>
       ${it.note?`<div class="dt-sec"><h5>Observação</h5><p>${linkify(it.note)}</p></div>`:''}
       ${it.more?`<div class="dt-sec more"><h5>Algo mais</h5><p>${linkify(it.more)}</p></div>`:''}
     </div>
-    <div class="m-f">${!it.done?'<button class="btn-text" data-snz>Adiar 1 dia</button>':''}<span class="sp"></span><button class="btn-ghost" data-tg style="height:38px">${it.done?'Marcar como pendente':'Marcar como feito'}</button><button class="btn-primary" data-ed>Editar</button></div>`, 'sm');
+    <div class="m-f">${!it.done?'<button class="btn-text" data-snz>Adiar 1 dia</button>':''}${it._occ?'<button class="btn-text" data-skip>Pular este dia</button>':''}<span class="sp"></span><button class="btn-ghost" data-tg style="height:38px">${it.done?'Marcar como pendente':'Marcar como feito'}</button><button class="btn-primary" data-ed>Editar</button></div>`, 'sm');
   s.querySelector('.modal').style.maxWidth = '520px';
   s.querySelectorAll('[data-x]').forEach(b => b.onclick = () => closeModal());
-  s.querySelector('[data-ed]').onclick = () => { closeModal(true); openEditor(id); };
+  s.querySelector('[data-ed]').onclick = () => { closeModal(true); openEditor(it._occ ? it.sid : id); };
   s.querySelector('[data-tg]').onclick = () => { putItem({...it, done:!it.done}); closeModal(); toast(it.done?'Marcado como pendente':'Marcado como feito', 'Desfazer', () => putItem({...it})); };
-  const sz = s.querySelector('[data-snz]'); if (sz) sz.onclick = () => { const m = snooze(it); putItem(m); closeModal(); toast('Adiado para '+dateTag(m.date), 'Desfazer', () => putItem({...it})); };
+  const sz = s.querySelector('[data-snz]'); if (sz) sz.onclick = () => { closeModal(); doSnooze(it); };
+  const sk = s.querySelector('[data-skip]'); if (sk) sk.onclick = () => { const series = S.items[it.sid], old = {...series}; putItem({...series, exDates:[...(series.exDates||[]), it.date]}); closeModal(); toast('Removido só deste dia', 'Desfazer', () => putItem(old)); };
 }
 
 /* ---------- Número no ícone do app ---------- */
 function updateBadge(){
   if (!('setAppBadge' in navigator) || !S.items) return;
   const t = todayIso();
-  const n = itemsArr().filter(it => !it.done && it.type!=='aviso' && it.date <= t && it.date >= iso(addDays(new Date(), -30))).length;
+  const n = itemsArr().filter(it => it.type!=='aviso' && !it.done && (it.date === t || isLate(it)) && it.date >= iso(addDays(new Date(), -30))).length;
   (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(()=>{});
 }
 
@@ -1277,9 +1383,9 @@ function endSwipe(){
   row.style.transition = 'transform .18s'; row.style.transform = ''; row.classList.remove('swipe-done','swipe-snooze','swiping');
   if (!active) return;
   suppressClick = true; setTimeout(()=>suppressClick=false, 60);
-  const it = S.items[id]; if (!it) return;
+  const it = getItem(id); if (!it) return;
   if (dx > 70){ putItem({...it, done:!it.done}); toast(it.done?'Marcado como pendente':'Marcado como feito', 'Desfazer', () => putItem({...it})); navigator.vibrate?.(10); }
-  else if (dx < -70){ const m = snooze(it); putItem(m); toast('Adiado para '+dateTag(m.date), 'Desfazer', () => putItem({...it})); navigator.vibrate?.(10); }
+  else if (dx < -70){ doSnooze(it); navigator.vibrate?.(10); }
 }
 document.addEventListener('pointerup', endSwipe, true);
 document.addEventListener('pointercancel', endSwipe, true);
@@ -1289,7 +1395,7 @@ function handleParams(){
   const q = new URLSearchParams(location.search);
   if (![...q.keys()].length) return;
   const v = q.get('view'); if (v && ['hoje','cal','prazos','ajustes'].includes(v)) setView(v);
-  if (q.get('open') && S.items[q.get('open')]) openDetail(q.get('open'));
+  if (q.get('open') && getItem(q.get('open'))) openDetail(q.get('open'));
   else if (q.get('new')) openEditor(null, {date: todayIso()});
   else if (q.get('st') || q.get('sx') || q.get('su')){
     const title = (q.get('st')||'').slice(0,120);
@@ -1297,7 +1403,7 @@ function handleParams(){
   }
   history.replaceState(null, '', location.pathname);
 }
-navigator.serviceWorker?.addEventListener('message', e => { if (e.data && e.data.open){ const go = () => S.items[e.data.open] ? openDetail(e.data.open) : null; go() === null && setTimeout(go, 1500); } });
+navigator.serviceWorker?.addEventListener('message', e => { if (e.data && e.data.open){ const go = () => getItem(e.data.open) ? openDetail(e.data.open) : null; go() === null && setTimeout(go, 1500); } });
 
 function openCatEditor(id){
   const ex = id ? S.cats[id] : null;
@@ -1349,7 +1455,8 @@ function exportICS(){
   const escI = s => String(s||'').replace(/\\/g,'\\\\').replace(/\n/g,'\\n').replace(/,/g,'\\,').replace(/;/g,'\\;');
   const d8 = s => s.replace(/-/g,'');
   let out = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//jaaacked//Agenda//PT','CALSCALE:GREGORIAN','X-WR-CALNAME:Agenda'];
-  itemsArr().filter(it => it.date >= t && !it.done && it.type!=='aviso').forEach(it => {
+  const lim60 = iso(addDays(new Date(), 60));
+  itemsArr().filter(it => it.date >= t && !it.done && it.type!=='aviso' && (!it._occ || it.date <= lim60)).forEach(it => {
     const c = cat(it.cat);
     out.push('BEGIN:VEVENT','UID:'+it.id+'@agenda-jaaacked','DTSTAMP:'+stamp);
     if (it.time){
@@ -1430,17 +1537,16 @@ function cleanupDrag(){
   drag.ghost?.remove(); drag.src.classList.remove('drag-src'); drag.over?.classList.remove('drop'); document.body.classList.remove('dragging');
 }
 function endDrag(){
-  const cell = drag.over, it = S.items[drag.id], kind = drag.kind;
+  const cell = drag.over, it = getItem(drag.id), kind = drag.kind;
   cleanupDrag();
   suppressClick = true; setTimeout(()=>suppressClick=false, 50);
   if (!cell || !it) return;
   const day = cell.dataset.cell, base = kind==='start' ? it.start : it.date;
   const delta = diffDays(day, base);
   if (!delta) return;
-  const old = {...it};
-  const moved = {...it, date: iso(addDays(parse(it.date), delta)), start: it.start ? iso(addDays(parse(it.start), delta)) : ''};
-  putItem(moved);
-  toast(`Movido para ${dateTag(kind==='start'?moved.start:moved.date)}`, 'Desfazer', () => putItem(old));
+  const nd = iso(addDays(parse(it.date), delta));
+  const undo = moveItem(it, nd);
+  toast(`Movido para ${dateTag(kind==='start'?iso(addDays(parse(it.start), delta)):nd)}${it._occ?' (só esta vez)':''}`, 'Desfazer', undo);
 }
 document.addEventListener('pointerdown', e => {
   const src = e.target.closest('[data-drag]');
@@ -1470,7 +1576,7 @@ function $(s){ return document.querySelector(s); }
 document.addEventListener('click', e => {
   const t = e.target;
   const done = t.closest('[data-done]');
-  if (done){ e.stopPropagation(); const it = S.items[done.dataset.done]; if (it){ putItem({...it, done:!it.done}); toast(it.done?'Marcado como pendente':'Marcado como feito', 'Desfazer', () => putItem({...it})); } return; }
+  if (done){ e.stopPropagation(); const it = getItem(done.dataset.done); if (it){ putItem({...it, done:!it.done}); toast(it.done?'Marcado como pendente':'Marcado como feito', 'Desfazer', () => putItem({...it})); } return; }
   const mh = t.closest('[data-month]'); if (mh){ const k = mh.dataset.month; S.openMonths.has(k) ? S.openMonths.delete(k) : S.openMonths.add(k); renderView(); return; }
   const fold = t.closest('[data-fold]'); if (fold){ const k = fold.dataset.fold; S.prefs[k] = !S.prefs[k]; savePrefs(); renderMini(); renderCats(); return; }
   const v = t.closest('[data-view]'); if (v){ setView(v.dataset.view); return; }
@@ -1530,7 +1636,7 @@ function start(){
   if (!S.cats || !Object.keys(S.cats).length) S.cats = Object.fromEntries(DEFAULT_CATS.map(c=>[c.id,c]));
   if (!S.items) S.items = FIREBASE_CONFIG ? {} : buildSeed();
   persist(); applySide(); render(); initSync();
-  if (!FIREBASE_CONFIG) migrateNotes();
+  if (!FIREBASE_CONFIG){ migrateNotes(); migrateCatColors(); }
   if (Object.keys(S.items).length) handleParams(); else setTimeout(handleParams, 1800);
   // atualiza "hoje" quando o dia vira ou o app volta ao primeiro plano
   document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
