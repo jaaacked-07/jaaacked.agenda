@@ -1,4 +1,4 @@
-const VERSION = 'agenda-v9';
+const VERSION = 'agenda-v10';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './favicon.png'];
 
 const FIREBASE_CONFIG = {

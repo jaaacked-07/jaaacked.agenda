@@ -230,7 +230,7 @@ main{display:flex;flex-direction:column;min-width:0;height:100dvh}
 .cal-head .nav2{display:flex;gap:2px}
 .mgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--line);gap:1px}
 .mgrid .wd{background:var(--surface);font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);padding:10px 10px 8px}
-.cell{background:var(--surface);min-height:118px;padding:6px 6px 8px;display:flex;flex-direction:column;gap:3px;cursor:pointer;min-width:0;transition:background .12s}
+.cell{background:var(--surface);min-height:118px;padding:6px 6px calc(10px + var(--lanes,0) * 6px);position:relative;display:flex;flex-direction:column;gap:3px;cursor:pointer;min-width:0;transition:background .12s}
 .cell:hover{background:color-mix(in srgb,var(--surface-2) 60%,var(--surface))}
 .cell.out{background:color-mix(in srgb,var(--surface-2) 45%,var(--surface))}
 .cell.out .dn{color:var(--faint)}
@@ -268,6 +268,17 @@ main{display:flex;flex-direction:column;min-width:0;height:100dvh}
 .mids{display:flex;gap:3px;padding:2px 4px 0;margin-top:auto}
 .mids i{height:3px;flex:1;max-width:18px;border-radius:2px;background:var(--c);opacity:.45}
 .dots{display:none}
+
+/* trilha dos prazos de vários dias */
+.rail{position:absolute;left:-1px;right:-1px;bottom:calc(5px + var(--ln) * 6px);height:3px;background:var(--c);z-index:1;cursor:pointer;transition:height .12s,bottom .12s,box-shadow .12s}
+.rail::after{content:"";position:absolute;left:0;right:0;top:-5px;bottom:-5px}
+.rail.rs{left:12px;border-top-left-radius:3px;border-bottom-left-radius:3px}
+.rail.re{right:12px;border-top-right-radius:3px;border-bottom-right-radius:3px}
+.rail.hl{height:5px;bottom:calc(4px + var(--ln) * 6px);box-shadow:0 0 0 2px color-mix(in srgb,var(--c) 28%,transparent)}
+.pill.hl{box-shadow:0 0 0 2px var(--c)}
+.wcol{position:relative;padding-bottom:calc(14px + var(--lanes,0) * 6px)!important}
+.wcol .rail{left:-11px;right:-11px}
+.wcol .rail.rs{left:12px}.wcol .rail.re{right:12px}
 
 /* week */
 .wgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px}
@@ -429,6 +440,10 @@ textarea.in{height:auto;min-height:84px;padding:10px 12px;resize:vertical;line-h
   .cell{min-height:56px;padding:5px 2px 6px;align-items:center;gap:4px}
   .cell .dn{font-size:13.5px;width:28px;height:28px}
   .cell .pill,.cell .more,.cell .mids{display:none}
+  .cell .rail{height:2.5px;pointer-events:none}
+  .cell .rail.rs{left:8px}.cell .rail.re{right:8px}
+  .cell{padding-bottom:calc(8px + var(--lanes,0) * 5px)}
+  .cell .rail{bottom:calc(4px + var(--ln) * 5px)}
   .cell .dots{display:flex;gap:3px;justify-content:center;flex-wrap:wrap;max-width:34px}
   .cell .dots i{width:5px;height:5px;border-radius:50%;background:var(--c)}
   .cell .dots i.ring{background:transparent;box-shadow:inset 0 0 0 1.2px var(--c)}
@@ -954,7 +969,7 @@ function rowHTML(it, opts={}){
   if (it.time) meta.push(it.time + (it.timeEnd?'–'+it.timeEnd:''));
   if (it._occ) meta.push('Repete');
   if (kind==='start') meta.unshift(it.start===t ? 'Abre hoje' : 'Abre em '+ddmm(it.start)+', prazo até '+ddmm(it.date));
-  if (kind==='mid') meta.unshift('Em andamento');
+  if (kind==='mid'){ const tot = diffDays(it.date, it.start)+1, cur = diffDays(opts.day||t, it.start)+1, left = diffDays(it.date, opts.day||t); meta.unshift(`Em andamento · dia ${cur} de ${tot} · ${left===1?'falta 1 dia':'faltam '+left+' dias'}`); }
   const dn = diffDays(it.date, t);
   const soon = !it.done && dn>=0 && dn<=3 && kind==='main' && it.type!=='aviso';
   const warn = soon ? `<span class="soon ${dn===0?'now':''}" title="${dn===0?'É hoje':'Está chegando'}"><svg viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.3v.2"/></svg></span> ` : '';
@@ -970,10 +985,10 @@ function pillHTML(o){
   const it = o.it, c = cat(it.cat), tg = `<b class="tg">${esc(catShort(c))}</b>`;
   if (o.kind==='main'){
     const late = isLate(it);
-    return `<div class="pill card ${it.done?'done':''}" data-open="${it.id}" data-drag="${it.id}" data-kind="main" style="--c:${c.color}" title="${esc(c.name)}${it.done?' · feito':late?' · pendente':''}"><div class="ph"><i class="pc ${it.done?'on':''} ${late?'late':''}" data-done="${it.id}">${CHK}</i>${tg}${it.time?`<em>${it.time}</em>`:''}</div><div class="pt">${esc(it.title)}</div>${it.note?`<div class="pn">${esc(it.note)}</div>`:''}</div>`;
+ return `<div class="pill card ${it.done?'done':''}" ${it.start?`data-r="${it.id}"`:''} data-open="${it.id}" data-drag="${it.id}" data-kind="main" style="--c:${c.color}" title="${esc(c.name)}${it.done?' · feito':late?' · pendente':''}"><div class="ph"><i class="pc ${it.done?'on':''} ${late?'late':''}" data-done="${it.id}">${CHK}</i>${tg}${it.time?`<em>${it.time}</em>`:''}</div><div class="pt">${esc(it.title)}</div>${it.note?`<div class="pn">${esc(it.note)}</div>`:''}</div>`;
   }
   const tip = esc(c.name+' · '+it.title+(it.note?'\n'+it.note:''));
-  if (o.kind==='start') return `<div class="pill start" data-open="${it.id}" data-drag="${it.id}" data-kind="start" style="--c:${c.color}" title="${tip} · começa (prazo até ${ddmm(it.date)})">${tg}<span>Início · ${esc(it.title)}</span></div>`;
+ if (o.kind==='start') return `<div class="pill start" data-r="${it.id}" data-open="${it.id}" data-drag="${it.id}" data-kind="start" style="--c:${c.color}" title="${tip} · começa (prazo até ${ddmm(it.date)})">${tg}<span>Início · ${esc(it.title)}</span></div>`;
   if (o.kind==='mid') return '';
   const late = isLate(it);
   return `<div class="pill ${it.done?'done':''}" data-open="${it.id}" data-drag="${it.id}" data-kind="main" style="--c:${c.color}" title="${tip}${it.done?' · feito':late?' · pendente':''}"><i class="pc ${it.done?'on':''} ${late?'late':''}" data-done="${it.id}">${CHK}</i>${tg}${it.time?`<em>${it.time}</em>`:''}<span>${esc(it.title)}${o.week&&it.note?`<small class="nt">${esc(it.note)}</small>`:''}</span></div>`;
@@ -1013,6 +1028,19 @@ function vHoje(){
 function vCal(){
   return S.prefs.calMode==='semana' ? vWeek() : vMonth();
 }
+/* distribui os prazos de vários dias em até 3 "faixas" estáveis */
+function rangeLanes(from, to){
+  const list = itemsArr().filter(visible).filter(it => it.start && it.start <= to && it.date >= from).sort((a,b)=>a.start.localeCompare(b.start) || a.date.localeCompare(b.date));
+  const ends = [], lane = {};
+  list.forEach(it => { let l = ends.findIndex(e => e < it.start); if (l === -1){ l = ends.length; ends.push(''); } ends[l] = it.date; lane[it.id] = l; });
+  return {list: list.filter(it => lane[it.id] < 3), lane};
+}
+function railsHTML(day, R){
+  const here = R.list.filter(it => it.start <= day && day <= it.date);
+  const n = here.length ? Math.max(...here.map(it => R.lane[it.id])) + 1 : 0;
+  const html = here.map(it => `<i class="rail ${it.start===day?'rs':''} ${it.date===day?'re':''}" data-r="${it.id}" data-open="${it.id}" style="--c:${cat(it.cat).color};--ln:${R.lane[it.id]}" title="${esc(cat(it.cat).name+' · '+it.title)} · ${ddmm(it.start)} → ${ddmm(it.date)}"></i>`).join('');
+  return {html, n};
+}
 function vMonth(){
   const c = S.cursor, y = c.getFullYear(), m = c.getMonth();
   const first = new Date(y,m,1), startDow = first.getDay();
@@ -1020,13 +1048,15 @@ function vMonth(){
   const cells = Math.ceil((startDow + last.getDate())/7)*7;
   const t = todayIso();
   let h = chipsHTML() + `<div class="mgrid" id="mgrid">` + SEM3.map(s=>`<div class="wd">${s}</div>`).join('');
+  const RL = rangeLanes(iso(addDays(first, -startDow)), iso(addDays(first, cells-startDow-1)));
   for (let i=0;i<cells;i++){
     const d = addDays(first, i-startDow), s = iso(d);
+    const rl = railsHTML(s, RL);
     const o = occ(s);
     const main = o.filter(x=>x.kind!=='mid');
     const show = main.slice(0,3);
     const cls = ['cell', d.getMonth()!==m?'out':'', s<t?'past':'', s===t?'today':'', s===S.sel?'sel':''].join(' ');
-    h += `<div class="${cls}" data-cell="${s}"><div class="dn">${d.getDate()}</div>${show.map(pillHTML).join('')}${main.length>3?`<div class="more">+${main.length-3} mais</div>`:''}
+    h += `<div class="${cls}" data-cell="${s}" style="--lanes:${rl.n}">${rl.html}<div class="dn">${d.getDate()}</div>${show.map(pillHTML).join('')}${main.length>3?`<div class="more">+${main.length-3} mais</div>`:''}
       <div class="dots">${main.slice(0,6).map(x=>`<i class="${x.kind==='start'?'ring':x.it.done?'done':isLate(x.it)?'late':''}" style="--c:${cat(x.it.cat).color}"></i>`).join('')}</div></div>`;
   }
   h += `</div>`;
@@ -1034,16 +1064,17 @@ function vMonth(){
   if (parse(S.sel).getMonth()!==m) return h;
   const so = occ(S.sel);
   h += `<div class="dlist-h"><h3>${cap(longDate(S.sel))}</h3><button data-newon="${S.sel}">Adicionar</button></div>
-        <div class="list">${so.length?so.map(x=>rowHTML(x.it,{kind:x.kind, when:x.it.time||'', drag:x.kind!=='mid'})).join(''):'<div class="empty">Nenhum compromisso neste dia.</div>'}</div>
+        <div class="list">${so.length?so.map(x=>rowHTML(x.it,{kind:x.kind, day:S.sel, when:x.it.time||'', drag:x.kind!=='mid'})).join(''):'<div class="empty">Nenhum compromisso neste dia.</div>'}</div>
         <p class="kbd" style="margin-top:10px">Para mudar a data, arraste o compromisso para outro dia${'ontouchstart' in window?' (toque e segure)':''}.</p>`;
   return h;
 }
 function vWeek(){
   const a = weekStart(S.weekRef || new Date()), t = todayIso();
   let h = chipsHTML() + `<div class="wgrid" id="mgrid">`;
+  const RL = rangeLanes(iso(a), iso(addDays(a,6)));
   for (let i=0;i<7;i++){
-    const d = addDays(a,i), s = iso(d), o = occ(s).filter(x=>x.kind!=='mid');
-    h += `<div class="wcol ${s===t?'today':''} ${s<t?'past':''}" data-cell="${s}"><div class="wh"><b>${d.getDate()}</b><span>${SEM3[d.getDay()]}</span></div><div class="items">${o.map(x=>pillHTML({...x, week:true})).join('')}</div></div>`;
+    const d = addDays(a,i), s = iso(d), o = occ(s).filter(x=>x.kind!=='mid'), rl = railsHTML(s, RL);
+    h += `<div class="wcol ${s===t?'today':''} ${s<t?'past':''}" data-cell="${s}" style="--lanes:${rl.n}">${rl.html}<div class="wh"><b>${d.getDate()}</b><span>${SEM3[d.getDay()]}</span></div><div class="items">${o.map(x=>pillHTML({...x, week:true})).join('')}</div></div>`;
   }
   return h + '</div>';
 }
@@ -1570,6 +1601,17 @@ document.addEventListener('pointercancel', () => { if (!drag) return; clearTimeo
 document.addEventListener('touchmove', e => { if (drag && drag.started) e.preventDefault(); }, {passive:false});
 document.addEventListener('contextmenu', e => { if (e.target.closest('[data-drag]') && S.view==='cal') e.preventDefault(); });
 document.addEventListener('click', e => { if (suppressClick){ e.stopPropagation(); e.preventDefault(); suppressClick = false; } }, true);
+
+/* destaque da trilha ao passar o mouse */
+let hlId = null;
+document.addEventListener('pointerover', e => {
+  if (e.pointerType && e.pointerType !== 'mouse') return;
+  const el = e.target.closest('[data-r]'), id = el ? el.dataset.r : null;
+  if (id === hlId) return;
+  if (hlId) document.querySelectorAll(`[data-r="${CSS.escape(hlId)}"]`).forEach(x => x.classList.remove('hl'));
+  hlId = id;
+  if (id) document.querySelectorAll(`[data-r="${CSS.escape(id)}"]`).forEach(x => x.classList.add('hl'));
+});
 
 /* ---------- Eventos globais ---------- */
 function $(s){ return document.querySelector(s); }
