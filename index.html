@@ -156,7 +156,20 @@ main{display:flex;flex-direction:column;min-width:0;height:100dvh}
 .row{display:flex;align-items:center;gap:14px;padding:12px 16px;min-height:56px;border-top:1px solid var(--line);cursor:pointer;transition:background .12s;position:relative}
 .row:first-child{border-top:0}
 .row:hover{background:var(--surface-2)}
-.row .bar{width:3px;align-self:stretch;border-radius:3px;background:var(--c);flex:none}
+.row .bar{width:4px;align-self:stretch;border-radius:3px;background:var(--c);flex:none}
+.list.tint .row{background:color-mix(in srgb,var(--c) 9%,var(--surface))}
+.list.tint .row:hover{background:color-mix(in srgb,var(--c) 14%,var(--surface))}
+.list.tint .row.done{background:var(--surface)}
+.soon{display:inline-flex;align-items:center;gap:5px;color:#A86A12;font-weight:500}
+.soon svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.soon.now{color:var(--danger)}
+.mh{display:flex;align-items:center;gap:8px;width:100%;margin:22px 0 10px;text-align:left;font:500 18px var(--serif);letter-spacing:-.01em;color:var(--text)}
+.mh:first-of-type{margin-top:10px}
+.mh .chev{width:16px;height:16px;color:var(--faint);transition:transform .18s}
+.mh.open .chev{transform:rotate(90deg)}
+.mh .cnt{margin-left:auto;font:400 12.5px var(--sans);color:var(--faint)}
+.mh .now-tag{font:600 10.5px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 35%,transparent);border-radius:999px;padding:2px 8px}
+.mh:hover .chev{color:var(--text)}
 .row .body{flex:1;min-width:0}
 .row .t{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .row .m{font-size:12.5px;color:var(--muted);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
@@ -234,13 +247,15 @@ main{display:flex;flex-direction:column;min-width:0;height:100dvh}
 .pill em{font-style:normal;opacity:.75;font-variant-numeric:tabular-nums;flex:none}
 .pill.start{background:transparent;border:1px dashed color-mix(in srgb,var(--c) 55%,transparent);border-left:2.5px solid color-mix(in srgb,var(--c) 55%,transparent);color:var(--muted);font-weight:400}
 .pill .tg{font-size:9.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;opacity:.7;flex:none}
-.pill .pc{width:13px;height:13px;border-radius:50%;border:1.3px solid color-mix(in srgb,var(--c) 70%,transparent);flex:none;display:grid;place-items:center;color:transparent;margin-left:-1px;cursor:pointer}
+.pill .pc{width:18px;height:18px;border-radius:50%;border:1.6px solid color-mix(in srgb,var(--c) 75%,transparent);background:var(--surface);flex:none;display:grid;place-items:center;color:transparent;margin-left:-1px;cursor:pointer;position:relative;transition:transform .1s}
+.pill .pc::after{content:"";position:absolute;inset:-7px}
+.pill .pc:active{transform:scale(.9)}
 .pill .pc:hover{background:color-mix(in srgb,var(--c) 25%,transparent)}
 .pill .pc.on{background:var(--c);border-color:var(--c);color:#fff}
 .pill .pc.late{border-color:var(--danger)}
-.pill .pc svg{width:9px;height:9px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.pill .pc svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
 .pill.card{display:block;padding:5px 7px 6px 7px;line-height:1.25;background:color-mix(in srgb,var(--c) 15%,var(--surface));border-left-width:3px}
-.pill.card .ph{display:flex;align-items:center;gap:5px;margin-bottom:3px}
+.pill.card .ph{display:flex;align-items:center;gap:6px;margin-bottom:4px}
 .pill.card .ph .tg{font-size:9px;opacity:.65}
 .pill.card .ph em{font-size:10.5px;margin-left:auto}
 .pill.card .pt{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal;font-size:12px;font-weight:500}
@@ -830,7 +845,10 @@ function rowHTML(it, opts={}){
   if (it.time) meta.push(it.time + (it.timeEnd?'–'+it.timeEnd:''));
   if (kind==='start') meta.unshift('Começa hoje');
   if (kind==='mid') meta.unshift('Em andamento');
-  const when = opts.when ? `<div class="when ${late?'late':''}">${opts.when}</div>` : '';
+  const dn = diffDays(it.date, t);
+  const soon = !it.done && dn>=0 && dn<=3 && kind==='main' && it.type!=='aviso';
+  const warn = soon ? `<span class="soon ${dn===0?'now':''}" title="${dn===0?'É hoje':'Está chegando'}"><svg viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17.3v.2"/></svg></span> ` : '';
+  const when = opts.when ? `<div class="when ${late?'late':''}">${warn}${opts.when}</div>` : (soon ? `<div class="when">${warn}</div>` : '');
   const chk = true
     ? `<button class="chk ${it.done?'on':''} ${late?'late':''}" data-done="${it.id}" aria-label="${it.done?'Marcar como pendente':'Marcar como feito'}" title="${it.done?'Feito':'Pendente'}">${I.check}</button>`
     : `<span class="chk-sp"></span>`;
@@ -921,7 +939,8 @@ function vWeek(){
 }
 
 function vPrazos(){
-  const t = todayIso();
+  const t = todayIso(), curKey = t.slice(0,7);
+  if (S.openMonthsFor !== curKey){ S.openMonths = new Set([curKey, 'late']); S.openMonthsFor = curKey; }
   const list = itemsArr().filter(visible).filter(it => it.type==='prazo').sort((a,b)=> a.date.localeCompare(b.date) || a.title.localeCompare(b.title));
   let h = `<div class="wrap">${chipsHTML()}`;
   if (!list.length) return h + `<div class="list" style="margin-top:16px"><div class="empty">Nenhum prazo cadastrado.</div></div></div>`;
@@ -929,9 +948,12 @@ function vPrazos(){
   list.forEach(it => { const k = isLate(it) ? 'late' : it.date.slice(0,7); (groups[k] = groups[k]||[]).push(it); });
   const keys = Object.keys(groups).sort((a,b)=> a==='late'?-1:b==='late'?1: a.localeCompare(b));
   keys.forEach(k => {
+    const open = S.openMonths.has(k);
     const label = k==='late' ? '<span style="color:var(--danger)">Pendentes de dias anteriores</span>' : (()=>{ const [y,m]=k.split('-'); return cap(MES[+m-1])+' '+y; })();
     const done = groups[k].filter(i=>i.done).length;
-    h += `<div class="month-h" style="display:flex;justify-content:space-between;align-items:baseline">${label}${k!=='late'?`<span style="font:400 12.5px var(--sans);color:var(--faint)">${done}/${groups[k].length} feitos</span>`:''}</div><div class="list">${groups[k].map(it=>rowHTML(it,{when: whenLabel(it.date)})).join('')}</div>`;
+    const cnt = k==='late' ? `${groups[k].length}` : `${done}/${groups[k].length} feitos`;
+    h += `<button class="mh ${open?'open':''}" data-month="${k}">${CHEV.replace('class="ico chev"','class="ico chev"')}${label}${k===curKey?'<span class="now-tag">Mês atual</span>':''}<span class="cnt">${cnt}</span></button>`;
+    if (open) h += `<div class="list tint">${groups[k].map(it=>rowHTML(it,{when: whenLabel(it.date)})).join('')}</div>`;
   });
   return h + '</div>';
 }
@@ -1266,6 +1288,7 @@ document.addEventListener('click', e => {
   const t = e.target;
   const done = t.closest('[data-done]');
   if (done){ e.stopPropagation(); const it = S.items[done.dataset.done]; if (it){ putItem({...it, done:!it.done}); toast(it.done?'Marcado como pendente':'Marcado como feito', 'Desfazer', () => putItem({...it})); } return; }
+  const mh = t.closest('[data-month]'); if (mh){ const k = mh.dataset.month; S.openMonths.has(k) ? S.openMonths.delete(k) : S.openMonths.add(k); renderView(); return; }
   const fold = t.closest('[data-fold]'); if (fold){ const k = fold.dataset.fold; S.prefs[k] = !S.prefs[k]; savePrefs(); renderMini(); renderCats(); return; }
   const v = t.closest('[data-view]'); if (v){ setView(v.dataset.view); return; }
   const open = t.closest('[data-open]'); if (open){ openEditor(open.dataset.open); return; }

@@ -1,4 +1,4 @@
-const VERSION = 'agenda-v6';
+const VERSION = 'agenda-v7';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './favicon.png'];
 
 self.addEventListener('install', e => {
