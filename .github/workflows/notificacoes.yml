@@ -1,0 +1,43 @@
+name: Notificações da agenda
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: notificacoes
+  cancel-in-progress: false
+
+jobs:
+  enviar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Instalar dependências
+        run: npm install --no-save --no-audit --no-fund firebase-admin@12
+      - name: Enviar notificações
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+        run: node scripts/notify.mjs
+      # O GitHub pausa tarefas agendadas após 60 dias sem alterações no repositório.
+      # Este passo faz um registro vazio a cada 45 dias para manter as notificações ativas.
+      - name: Manter agendamento ativo
+        run: |
+          last=$(git log -1 --format=%ct)
+          now=$(date +%s)
+          if [ $((now - last)) -gt 3888000 ]; then
+            git config user.name "agenda-bot"
+            git config user.email "agenda-bot@users.noreply.github.com"
+            git commit --allow-empty -m "Manter notificações ativas"
+            git push
+          fi

@@ -363,6 +363,31 @@ textarea.in{height:auto;min-height:84px;padding:10px 12px;resize:vertical;line-h
 .pal-hint i{width:14px;height:14px;border-radius:4px;background:var(--faint);position:relative}
 .pal-hint i::before{content:"";position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:#fff}
 
+/* detail view */
+.dt-cat{display:inline-flex;align-items:center;gap:8px;height:28px;padding:0 11px 0 9px;border-radius:8px;background:color-mix(in srgb,var(--c) 14%,var(--surface));color:color-mix(in srgb,var(--c) 60%,var(--text));font-size:12.5px;font-weight:600}
+.dt-cat i{width:12px;height:12px;border-radius:4px;background:var(--c)}
+.dt-title{font:500 24px/1.2 var(--serif);letter-spacing:-.015em;margin:6px 0 16px;word-break:break-word}
+.dt-title.done{text-decoration:line-through;color:var(--faint)}
+.dt-grid{display:grid;grid-template-columns:110px 1fr;gap:10px 14px;font-size:14px;padding:14px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.dt-grid dt{color:var(--muted);font-size:12.5px;padding-top:1px}
+.dt-grid dd small{display:block;color:var(--faint);font-size:12.5px}
+.st{display:inline-flex;align-items:center;gap:6px;font-weight:500}
+.st i{width:8px;height:8px;border-radius:50%;background:var(--faint)}
+.st.ok{color:#3F7A55}.st.ok i{background:#3F7A55}
+.st.late{color:var(--danger)}.st.late i{background:var(--danger)}
+.dt-sec{margin-top:16px}
+.dt-sec h5{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.dt-sec p{white-space:pre-line;word-break:break-word;line-height:1.55}
+.dt-sec p a{color:var(--text);text-decoration:underline;text-underline-offset:2px;text-decoration-color:var(--line-2)}
+.dt-sec.more p{font-size:13.5px;color:var(--muted)}
+/* swipe */
+.row{touch-action:pan-y}
+.row.swiping{transition:none}
+.row.swipe-done{background:color-mix(in srgb,#3F7A55 14%,var(--surface))!important}
+.row.swipe-snooze{background:color-mix(in srgb,#A86A12 14%,var(--surface))!important}
+.notif-times{display:flex;gap:8px;flex-wrap:wrap}
+.notif-times input{width:122px}
+
 /* toast */
 #toast{position:fixed;left:50%;bottom:calc(28px + var(--sab));transform:translate(-50%,20px);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:500;opacity:0;pointer-events:none;transition:all .2s;z-index:60;display:flex;gap:14px;align-items:center}
 #toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
@@ -480,6 +505,9 @@ const FIREBASE_CONFIG_REAL = {
 
 const FIREBASE_CONFIG = (location.hostname==="localhost") ? null : FIREBASE_CONFIG_REAL;
 const USER = 'jaaacked';
+/* Chave pública de notificações (Firebase > Configurações do projeto > Cloud Messaging > Web Push) */
+const VAPID_KEY = '';
+const NOTIF_DEFAULT = {enabled:true, morning:'07:30', evening:'20:00', ahead:'09:00', reminders:['11:00','15:00','18:00','21:00'], muted:[]};
 const LS = k => 'agenda.' + k;
 
 /* ---------- Ícones ---------- */
@@ -667,6 +695,7 @@ const S = {
   prazoTab: 'abertos',
   q: '',
   sync: FIREBASE_CONFIG ? 'conectando' : 'local',
+  notif: Object.assign({}, NOTIF_DEFAULT),
   searchOpen: false
 };
 S.cursor.setDate(1);
@@ -693,7 +722,8 @@ async function initSync(){
     const itemsCol = fs.collection(db, 'users', USER, 'items');
     const catsCol = fs.collection(db, 'users', USER, 'cats');
     const metaRef = fs.doc(db, 'users', USER, 'meta', 'seed');
-    FB = {fs, db, itemsCol, catsCol};
+    FB = {fs, db, itemsCol, catsCol, app};
+    fs.onSnapshot(fs.doc(db, 'users', USER, 'meta', 'notif'), d => { S.notif = Object.assign({}, NOTIF_DEFAULT, d.exists() ? d.data() : {}); if (S.view==='ajustes') renderView(); });
 
     const meta = await fs.getDoc(metaRef).catch(()=>null);
     if (meta && !meta.exists()){
@@ -974,7 +1004,8 @@ function vAjustes(){
   <div class="card"><h4>Aparência</h4>
     <div class="srow"><div class="grow">Tema</div><div class="seg"><button class="${th==='auto'?'on':''}" data-theme="auto">Automático</button><button class="${th==='light'?'on':''}" data-theme="light">Claro</button><button class="${th==='dark'?'on':''}" data-theme="dark">Escuro</button></div></div>
   </div>
-  <div class="card"><h4>Lembretes no celular</h4>
+  ${notifCardHTML()}
+  <div class="card"><h4>Agenda do celular</h4>
     <div class="srow"><div class="grow">Exportar para Google ou Apple Agenda<div class="sub">Gera um arquivo .ics com os prazos e compromissos futuros, com alerta às 9h do dia anterior.</div></div><button class="btn-ghost" data-act="ics">Exportar</button></div>
   </div>
   <div class="card"><h4>Dados</h4>
@@ -996,7 +1027,7 @@ function renderView(){
 }
 function render(){
   if (!S.items) return;
-  renderNav(); renderCats(); renderMini(); renderSync(); renderTop(); renderView();
+  renderNav(); renderCats(); renderMini(); renderSync(); renderTop(); renderView(); updateBadge();
 }
 
 /* ---------- Modal ---------- */
@@ -1026,7 +1057,7 @@ function confirmBox(title, text, okLbl, onOk){
 
 function openEditor(id, preset={}){
   const ex = id ? S.items[id] : null;
-  const it = ex ? {...ex} : preset.copy ? {...preset.copy} : {id:uid(), title:'', cat: preset.cat || (catsArr()[0]||{}).id || 'pessoal', type:'evento', date: preset.date || S.sel || todayIso(), start:'', time:'', timeEnd:'', note:'', done:false};
+  const it = ex ? {...ex} : preset.copy ? {...preset.copy} : preset.prefill ? {id:uid(), title:preset.prefill.title||'', more:preset.prefill.more||'', cat:(catsArr()[0]||{}).id||'pessoal', type:'evento', date:preset.date||todayIso(), start:'', time:'', timeEnd:'', note:'', done:false} : {id:uid(), title:'', cat: preset.cat || (catsArr()[0]||{}).id || 'pessoal', type:'evento', date: preset.date || S.sel || todayIso(), start:'', time:'', timeEnd:'', note:'', done:false};
   const ranged = !!it.start;
   const allDay = !it.time;
   const s = openModal(`
@@ -1053,6 +1084,7 @@ function openEditor(id, preset={}){
       </div>
       <div class="f"><label class="l">Observação</label><textarea class="in" id="eNote" rows="2" style="min-height:58px" placeholder="Curta e direta. Aparece no calendário e nas listas.">${esc(it.note)}</textarea></div>
       <div class="f"><label class="l">Algo mais? <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--faint);margin-left:4px">não aparece no calendário</span></label><textarea class="in" id="eMore" placeholder="Links, documentos, detalhes…">${esc(it.more||'')}</textarea><div class="links" id="eLinks"></div></div>
+      <div class="f"><label class="l">Avisar no celular</label><div class="seg full" id="eAlert">${[['','Padrão'],['1d','1 dia antes'],['3d','3 dias antes'],['nao','Não avisar']].map(([v,l])=>`<button type="button" data-a="${v}" class="${(it.alert||'')===v?'on':''}">${l}</button>`).join('')}</div></div>
       <div class="f" id="eDoneWrap"><div class="toggle ${it.done?'on':''}" id="eDone"><span>Feito</span><div class="sw2"></div></div></div>
     </div>
     <div class="m-f">${ex?'<button class="btn-text danger" data-del>Excluir</button><button class="btn-text" data-dup>Duplicar</button>':''}<span class="sp"></span><span class="kbd d-only">Shift+Enter para salvar</span><button class="btn-text" data-x>Cancelar</button><button class="btn-primary" data-save>Salvar</button></div>`);
@@ -1077,6 +1109,7 @@ function openEditor(id, preset={}){
   q('#eNcName').addEventListener('keydown', e => { if (e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); createCat(); } });
   const drawLinks = () => { const urls = ((q('#eNote').value+' '+q('#eMore').value).match(/https?:\/\/[^\s)]+/g)||[]); q('#eLinks').innerHTML = urls.map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener">Abrir ${esc(u.replace(/^https?:\/\/(www\.)?/,'').split('/')[0])}</a>`).join(''); };
   drawLinks(); q('#eNote').addEventListener('input', drawLinks); q('#eMore').addEventListener('input', drawLinks);
+  q('#eAlert').onclick = e => { const b = e.target.closest('[data-a]'); if(!b) return; it.alert = b.dataset.a; q('#eAlert').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); };
   q('#eType').onclick = e => { const b = e.target.closest('[data-t]'); if(!b) return; it.type = b.dataset.t; q('#eType').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); setHint(); };
   q('#eRange').onclick = () => { const on = !q('#eRange').classList.contains('on'); q('#eRange').classList.toggle('on', on); q('#eStartWrap').classList.toggle('hidden', !on); q('#eDateLbl').textContent = on?'Fim':'Data'; if (on && !q('#eStart').value) q('#eStart').value = q('#eDate').value; };
   q('#eAll').onclick = () => { const on = !q('#eAll').classList.contains('on'); q('#eAll').classList.toggle('on', on); q('#eTimes').classList.toggle('hidden', on); };
@@ -1116,6 +1149,156 @@ function catPreviewHTML(name, color, short){
     <div><div class="pl">Nas listas</div><div class="row-demo"><span class="bar"></span><div>Exemplo de compromisso<small>${esc(nm)}</small></div></div></div>
   </div>`;
 }
+function linkify(txt){ return esc(txt).replace(/https?:\/\/[^\s)<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u.replace(/^https?:\/\/(www\.)?/,'').slice(0,60)}${u.length>70?'…':''}</a>`); }
+function snooze(it, days=1){ return {...it, date: iso(addDays(parse(it.date), days)), start: it.start ? iso(addDays(parse(it.start), days)) : ''}; }
+function openDetail(id){
+  const it = S.items[id]; if (!it) return;
+  const c = cat(it.cat), t = todayIso(), late = isLate(it);
+  const typeLbl = {prazo:'Prazo', aviso:'Aviso', evento:'Compromisso'}[it.type] || '';
+  const when = it.start
+    ? `De ${dateTag(it.start)}<br>até ${dateTag(it.date)}<small>${relLabel(it.date)==='Hoje'?'Termina hoje':relLabel(it.date)}</small>`
+    : `${dateTag(it.date)}<small>${relLabel(it.date)}</small>`;
+  const hora = it.time ? `<dt>Horário</dt><dd>${it.time}${it.timeEnd?' às '+it.timeEnd:''}</dd>` : '';
+  const st = it.done ? '<span class="st ok"><i></i>Feito</span>' : late ? '<span class="st late"><i></i>Pendente, atrasado</span>' : '<span class="st"><i></i>Pendente</span>';
+  const alertLbl = {nao:'Não avisar', '1d':'1 dia antes', '3d':'3 dias antes'}[it.alert] || 'Padrão';
+  const s = openModal(`
+    <div class="m-h"><span class="dt-cat" style="--c:${c.color}"><i></i>${esc(c.name)}</span><button class="icon-btn" data-x aria-label="Fechar">${I.x}</button></div>
+    <div class="m-b">
+      <h2 class="dt-title ${it.done?'done':''}">${esc(it.title)}</h2>
+      <dl class="dt-grid"><dt>Data</dt><dd>${when}</dd>${hora}<dt>Tipo</dt><dd>${typeLbl}</dd><dt>Situação</dt><dd>${st}</dd><dt>Avisos</dt><dd>${alertLbl}</dd></dl>
+      ${it.note?`<div class="dt-sec"><h5>Observação</h5><p>${linkify(it.note)}</p></div>`:''}
+      ${it.more?`<div class="dt-sec more"><h5>Algo mais</h5><p>${linkify(it.more)}</p></div>`:''}
+    </div>
+    <div class="m-f">${!it.done?'<button class="btn-text" data-snz>Adiar 1 dia</button>':''}<span class="sp"></span><button class="btn-ghost" data-tg style="height:38px">${it.done?'Marcar como pendente':'Marcar como feito'}</button><button class="btn-primary" data-ed>Editar</button></div>`, 'sm');
+  s.querySelector('.modal').style.maxWidth = '520px';
+  s.querySelectorAll('[data-x]').forEach(b => b.onclick = () => closeModal());
+  s.querySelector('[data-ed]').onclick = () => { closeModal(true); openEditor(id); };
+  s.querySelector('[data-tg]').onclick = () => { putItem({...it, done:!it.done}); closeModal(); toast(it.done?'Marcado como pendente':'Marcado como feito', 'Desfazer', () => putItem({...it})); };
+  const sz = s.querySelector('[data-snz]'); if (sz) sz.onclick = () => { const m = snooze(it); putItem(m); closeModal(); toast('Adiado para '+dateTag(m.date), 'Desfazer', () => putItem({...it})); };
+}
+
+/* ---------- Número no ícone do app ---------- */
+function updateBadge(){
+  if (!('setAppBadge' in navigator) || !S.items) return;
+  const t = todayIso();
+  const n = itemsArr().filter(it => !it.done && it.type!=='aviso' && it.date <= t && it.date >= iso(addDays(new Date(), -30))).length;
+  (n ? navigator.setAppBadge(n) : navigator.clearAppBadge()).catch(()=>{});
+}
+
+/* ---------- Notificações (push) ---------- */
+const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+const isStandalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+function notifState(){
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) return isIOS && !isStandalone ? 'ios-install' : 'unsupported';
+  if (isIOS && !isStandalone) return 'ios-install';
+  if (!VAPID_KEY || !FIREBASE_CONFIG) return 'pending-config';
+  if (Notification.permission === 'denied') return 'denied';
+  return (Notification.permission === 'granted' && load('pushToken', null)) ? 'on' : 'off';
+}
+async function enablePush(){
+  const st = notifState();
+  if (st==='ios-install'){ toast('No iPhone, instale o app pelo Safari (Compartilhar > Adicionar à Tela de Início) e ative por lá.'); return; }
+  if (st==='pending-config'){ toast('Falta a chave de notificações do Firebase. Assim que ela for configurada, este botão funciona.'); return; }
+  if (st==='unsupported'){ toast('Este navegador não aceita notificações.'); return; }
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted'){ toast('Permissão negada. Libere as notificações nas configurações do aparelho.'); renderView(); return; }
+  try {
+    const V = '10.12.2';
+    const msg = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-messaging.js`);
+    const reg = await navigator.serviceWorker.ready;
+    const token = await msg.getToken(msg.getMessaging(FB.app), {vapidKey: VAPID_KEY, serviceWorkerRegistration: reg});
+    if (!token) throw new Error('sem token');
+    await FB.fs.setDoc(FB.fs.doc(FB.db, 'users', USER, 'tokens', token.slice(-40)), {token, ua: navigator.userAgent.slice(0,120), at: Date.now()});
+    store('pushToken', token);
+    toast('Notificações ativadas neste aparelho');
+  } catch(e){ console.error(e); toast('Não foi possível ativar as notificações agora.'); }
+  renderView();
+}
+async function disablePush(){
+  const tk = load('pushToken', null);
+  if (tk && FB) await FB.fs.deleteDoc(FB.fs.doc(FB.db, 'users', USER, 'tokens', tk.slice(-40))).catch(()=>{});
+  localStorage.removeItem(LS('pushToken')); toast('Notificações desativadas neste aparelho'); renderView();
+}
+function saveNotif(patch){
+  S.notif = Object.assign({}, S.notif, patch);
+  if (FB) FB.fs.setDoc(FB.fs.doc(FB.db, 'users', USER, 'meta', 'notif'), S.notif).catch(()=>{});
+}
+async function testNotif(){
+  if (Notification.permission !== 'granted'){ const p = await Notification.requestPermission(); if (p!=='granted'){ toast('Permita as notificações para ver o teste.'); return; } }
+  const t = todayIso();
+  const list = itemsArr().filter(it => it.date>=t && !it.done).sort((a,b)=>a.date.localeCompare(b.date));
+  const it = list[0];
+  const reg = await navigator.serviceWorker.ready;
+  const more = list.filter(x=>x.date===(it&&it.date)).length - 1;
+  reg.showNotification(it ? 'Hoje: '+it.title : 'Agenda', {
+    body: it ? `${catShort(cat(it.cat))} · ${it.note || dateTag(it.date)}${more>0?`\nMais ${more} compromisso${more>1?'s':''} agendado${more>1?'s':''} para hoje`:''}` : 'Exemplo de notificação.',
+    icon: 'icon-192.png', badge: 'favicon.png', tag: 'teste', data: {id: it ? it.id : ''},
+    actions: it ? [{action:'done', title:'Feito'}, {action:'snooze', title:'Adiar 1 dia'}] : []
+  });
+}
+function notifCardHTML(){
+  const st = notifState(), n = S.notif;
+  const stTxt = {on:'Ativas neste aparelho.', off:'Desativadas neste aparelho.', denied:'Bloqueadas nas configurações do aparelho. Libere por lá para ativar.', 'pending-config':'Aguardando a configuração da chave do Firebase.', 'ios-install':'No iPhone, funcionam só com o app instalado pelo Safari (Compartilhar > Adicionar à Tela de Início).', unsupported:'Este navegador não aceita notificações.'}[st];
+  const btn = st==='on' ? '<button class="btn-ghost" data-act="pushoff">Desativar</button>' : (st==='off'||st==='pending-config'||st==='ios-install') ? '<button class="btn-primary" data-act="pushon" style="height:36px">Ativar</button>' : '';
+  const rem = n.reminders || [];
+  return `<div class="card"><h4>Notificações</h4>
+    <div class="srow"><div class="grow">Notificações no celular<div class="sub">${stTxt}</div></div>${btn}</div>
+    <div class="srow"><div class="grow">Resumo do dia<div class="sub">Mostra o principal compromisso de hoje e quantos outros existem.</div></div><input type="time" class="in" style="width:122px" data-nset="morning" value="${n.morning||''}"></div>
+    <div class="srow"><div class="grow">Lembretes de pendências<div class="sub">Só são enviados se ainda houver algo pendente. Alternam entre os itens pendentes. Deixe em branco para remover um horário.</div><div class="notif-times" style="margin-top:8px">${[0,1,2,3].map(i=>`<input type="time" class="in" data-nrem="${i}" value="${rem[i]||''}">`).join('')}</div></div></div>
+    <div class="srow"><div class="grow">Prazos chegando<div class="sub">Aviso 3 dias e 1 dia antes do fim de prazos de vários dias.</div></div><input type="time" class="in" style="width:122px" data-nset="ahead" value="${n.ahead||''}"></div>
+    <div class="srow"><div class="grow">Véspera<div class="sub">O que está marcado para amanhã.</div></div><input type="time" class="in" style="width:122px" data-nset="evening" value="${n.evening||''}"></div>
+    <div class="srow"><div class="grow">Categorias em silêncio<div class="sub">Toque para silenciar ou reativar.</div><div class="chips" style="margin-top:8px;flex-wrap:wrap">${catsArr().map(c=>`<button class="chip ${(n.muted||[]).includes(c.id)?'off':''}" data-nmute="${c.id}" style="--c:${c.color}"><i></i>${esc(c.name)}</button>`).join('')}</div></div></div>
+    <div class="srow"><div class="grow">Ver um exemplo<div class="sub">Mostra agora uma notificação de teste neste aparelho.</div></div><button class="btn-ghost" data-act="pushtest">Testar</button></div>
+  </div>`;
+}
+document.addEventListener('change', e => {
+  const ns = e.target.closest('[data-nset]'); if (ns){ saveNotif({[ns.dataset.nset]: ns.value}); toast('Horário salvo'); return; }
+  const nr = e.target.closest('[data-nrem]'); if (nr){ const r = [...(S.notif.reminders||[])]; r[+nr.dataset.nrem] = nr.value; saveNotif({reminders: r.map(x=>x||'')}); toast('Horário salvo'); }
+});
+
+/* ---------- Deslizar nas listas (celular) ---------- */
+let sw = null;
+document.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'touch') return;
+  const row = e.target.closest('.row[data-open]'); if (!row || e.target.closest('[data-done]')) return;
+  sw = {row, id: row.dataset.open, x: e.clientX, y: e.clientY, dx: 0, active: false};
+}, true);
+document.addEventListener('pointermove', e => {
+  if (!sw) return;
+  const dx = e.clientX - sw.x, dy = e.clientY - sw.y;
+  if (!sw.active){ if (Math.abs(dy) > 12){ sw = null; return; } if (Math.abs(dx) < 14) return; sw.active = true; sw.row.classList.add('swiping'); if (drag){ clearTimeout(drag.timer); drag = null; } }
+  sw.dx = Math.max(-140, Math.min(140, dx));
+  sw.row.style.transform = `translateX(${sw.dx}px)`;
+  sw.row.classList.toggle('swipe-done', sw.dx > 70); sw.row.classList.toggle('swipe-snooze', sw.dx < -70);
+}, true);
+function endSwipe(){
+  if (!sw) return;
+  const {row, id, dx, active} = sw; sw = null;
+  row.style.transition = 'transform .18s'; row.style.transform = ''; row.classList.remove('swipe-done','swipe-snooze','swiping');
+  if (!active) return;
+  suppressClick = true; setTimeout(()=>suppressClick=false, 60);
+  const it = S.items[id]; if (!it) return;
+  if (dx > 70){ putItem({...it, done:!it.done}); toast(it.done?'Marcado como pendente':'Marcado como feito', 'Desfazer', () => putItem({...it})); navigator.vibrate?.(10); }
+  else if (dx < -70){ const m = snooze(it); putItem(m); toast('Adiado para '+dateTag(m.date), 'Desfazer', () => putItem({...it})); navigator.vibrate?.(10); }
+}
+document.addEventListener('pointerup', endSwipe, true);
+document.addEventListener('pointercancel', endSwipe, true);
+
+/* ---------- Abrir pelo atalho, notificação ou compartilhamento ---------- */
+function handleParams(){
+  const q = new URLSearchParams(location.search);
+  if (![...q.keys()].length) return;
+  const v = q.get('view'); if (v && ['hoje','cal','prazos','ajustes'].includes(v)) setView(v);
+  if (q.get('open') && S.items[q.get('open')]) openDetail(q.get('open'));
+  else if (q.get('new')) openEditor(null, {date: todayIso()});
+  else if (q.get('st') || q.get('sx') || q.get('su')){
+    const title = (q.get('st')||'').slice(0,120);
+    openEditor(null, {date: todayIso(), prefill:{title, more: [q.get('sx'), q.get('su')].filter(Boolean).join('\n')}});
+  }
+  history.replaceState(null, '', location.pathname);
+}
+navigator.serviceWorker?.addEventListener('message', e => { if (e.data && e.data.open){ const go = () => S.items[e.data.open] ? openDetail(e.data.open) : null; go() === null && setTimeout(go, 1500); } });
+
 function openCatEditor(id){
   const ex = id ? S.cats[id] : null;
   const c = ex ? {...ex} : {id:'c'+uid(), name:'', color: PALETTE.find(p=>!catsArr().some(x=>x.color===p)) || PALETTE[0], order: catsArr().length+1};
@@ -1291,7 +1474,7 @@ document.addEventListener('click', e => {
   const mh = t.closest('[data-month]'); if (mh){ const k = mh.dataset.month; S.openMonths.has(k) ? S.openMonths.delete(k) : S.openMonths.add(k); renderView(); return; }
   const fold = t.closest('[data-fold]'); if (fold){ const k = fold.dataset.fold; S.prefs[k] = !S.prefs[k]; savePrefs(); renderMini(); renderCats(); return; }
   const v = t.closest('[data-view]'); if (v){ setView(v.dataset.view); return; }
-  const open = t.closest('[data-open]'); if (open){ openEditor(open.dataset.open); return; }
+  const open = t.closest('[data-open]'); if (open){ openDetail(open.dataset.open); return; }
   const day = t.closest('[data-day]'); if (day){ S.sel = day.dataset.day; const d = parse(S.sel); S.cursor = new Date(d.getFullYear(), d.getMonth(), 1); S.weekRef = d; if (S.view!=='cal') S.view='cal'; S.q=''; render(); return; }
   const cell = t.closest('[data-cell]');
   if (cell){
@@ -1304,6 +1487,7 @@ document.addEventListener('click', e => {
   }
   const nw = t.closest('[data-newon]'); if (nw){ openEditor(null, {date:nw.dataset.newon}); return; }
   const ec0 = t.closest('[data-editcat]'); if (ec0){ openCatEditor(ec0.dataset.editcat); return; }
+  const nm = t.closest('[data-nmute]'); if (nm){ const m = new Set(S.notif.muted||[]); m.has(nm.dataset.nmute) ? m.delete(nm.dataset.nmute) : m.add(nm.dataset.nmute); saveNotif({muted:[...m]}); renderView(); return; }
   const tc = t.closest('[data-togglecat]'); if (tc){ const id = tc.dataset.togglecat; const h = S.prefs.hidden; S.prefs.hidden = h.includes(id) ? h.filter(x=>x!==id) : [...h,id]; savePrefs(); render(); return; }
   const cm = t.closest('[data-calmode]'); if (cm){ S.prefs.calMode = cm.dataset.calmode; if (cm.dataset.calmode==='semana'){ S.weekRef = parse(S.sel); S.cursor = new Date(S.weekRef.getFullYear(), S.weekRef.getMonth(), 1); } savePrefs(); render(); return; }
   const th = t.closest('[data-theme]'); if (th && !th.matches('html')){ S.prefs.theme = th.dataset.theme; savePrefs(); applyTheme(); render(); return; }
@@ -1316,6 +1500,7 @@ document.addEventListener('click', e => {
     allcats: () => { S.prefs.hidden = []; savePrefs(); render(); },
     search: () => { S.searchOpen = !S.searchOpen; if (!S.searchOpen) S.q=''; render(); },
     newcat: () => openCatEditor(null),
+    pushon: enablePush, pushoff: disablePush, pushtest: testNotif,
     ics: exportICS, export: exportJSON, import: importJSON,
     logout: () => confirmBox('Sair', 'Você poderá entrar de novo com o mesmo usuário. Seus dados continuam salvos.', 'Sair', () => { localStorage.removeItem(LS('user')); location.reload(); })
   })[a.dataset.act]?.();
@@ -1346,6 +1531,7 @@ function start(){
   if (!S.items) S.items = FIREBASE_CONFIG ? {} : buildSeed();
   persist(); applySide(); render(); initSync();
   if (!FIREBASE_CONFIG) migrateNotes();
+  if (Object.keys(S.items).length) handleParams(); else setTimeout(handleParams, 1800);
   // atualiza "hoje" quando o dia vira ou o app volta ao primeiro plano
   document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 }
