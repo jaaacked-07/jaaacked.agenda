@@ -548,13 +548,48 @@ const SEED_RAW = [
 ['2027-03-27',null,'crm','prazo','Enviar e-diploma ao CREMERJ','PDF e XML para registromedico@crm-rj.gov.br. Prazo de 120 dias; se perder, a inscrição é cancelada.',0],
 ['2027-03-31','2027-02-10','enare','prazo','Período de matrícula ENARE','Conforme a instituição.',0]
 ];
+/* Observação curta (aparece no calendário); o texto completo vai para "Algo mais?" */
+const SHORT = {
+  s002:'Opção 03 (só JF) ou 06 (ampla). Não dá para trocar depois.',
+  s008:'PIX, sem agendar.',
+  s010:'Eliminatório: precisa ser proficiente.',
+  s011:'Só atuar com número ativo.',
+  s013:'Portões 13h–13h45, início 14h.',
+  s016:'Envio só em 09 e 10/01.',
+  s024:'Até 16h59 de 10/01. Taxa não devolvida.',
+  s025:'Só se precisar de atendimento especial.',
+  s026:'Vale a última escolha confirmada.',
+  s034:'8h–16h, presencial. Levar original e cópia.',
+  s039:'Nada a fazer.',
+  s040:'Não se aplica a MFC/GO.',
+  s044:'Não se aplica a MFC/GO.',
+  s047:'Passam 5× as vagas (MFC 20, GO 15).',
+  s048:'Perder o prazo = desistência.',
+  s050:'Só se passar na 1ª etapa (04/02).',
+  s051:'Coincide com a matrícula UERJ (16–18/02).',
+  s053:'Aprovado ou em espera.',
+  s056:'Presencial, 9h–11h e 14h–16h.',
+  s059:'Às 8h.',
+  s060:'Só se matriculou sem CRM.',
+  s061:'PDF e XML para registromedico@crm-rj.gov.br.'
+};
+const seedId = i => 's' + String(i+1).padStart(3,'0');
 function buildSeed(){
   const o = {};
   SEED_RAW.forEach((r,i)=>{
-    const id = 's' + String(i+1).padStart(3,'0');
-    o[id] = {id, date:r[0], start:r[1]||'', cat:r[2], type:r[3], title:r[4], note:r[5]||'', done:!!r[6], time:r[7]||'', timeEnd:'', updated:0};
+    const id = seedId(i), long = r[5]||'';
+    o[id] = {id, date:r[0], start:r[1]||'', cat:r[2], type:r[3], title:r[4], note: SHORT[id] || long, more: SHORT[id] ? long : '', done:!!r[6], time:r[7]||'', timeEnd:'', updated:0};
   });
   return o;
+}
+/* Migração única: separa observações longas já salvas (idempotente, funciona em todos os aparelhos) */
+let migrated = false;
+function migrateNotes(){
+  if (migrated || !S.items) return; migrated = true;
+  SEED_RAW.forEach((r,i)=>{
+    const id = seedId(i), it = S.items[id];
+    if (it && SHORT[id] && it.note === r[5] && !it.more) putItem({...it, note: SHORT[id], more: r[5]});
+  });
 }
 
 /* ---------- Datas ---------- */
@@ -647,6 +682,7 @@ async function initSync(){
     fs.onSnapshot(itemsCol, snap => {
       const o = {}; snap.forEach(d => o[d.id] = d.data());
       S.items = o; persist(); setSync(snap.metadata.fromCache ? 'offline' : 'ok'); render();
+      if (!snap.metadata.fromCache) migrateNotes();
     }, () => setSync('offline'));
     fs.onSnapshot(catsCol, snap => {
       const o = {}; snap.forEach(d => o[d.id] = d.data());
@@ -1259,6 +1295,7 @@ function start(){
   if (!S.cats || !Object.keys(S.cats).length) S.cats = Object.fromEntries(DEFAULT_CATS.map(c=>[c.id,c]));
   if (!S.items) S.items = FIREBASE_CONFIG ? {} : buildSeed();
   persist(); applySide(); render(); initSync();
+  if (!FIREBASE_CONFIG) migrateNotes();
   // atualiza "hoje" quando o dia vira ou o app volta ao primeiro plano
   document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
 }
