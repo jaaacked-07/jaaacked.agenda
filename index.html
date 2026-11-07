@@ -310,9 +310,16 @@ textarea.in{height:auto;min-height:84px;padding:10px 12px;resize:vertical;line-h
 .in.title:focus{box-shadow:none;border-color:var(--text)}
 .f2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .catpick{display:flex;flex-wrap:wrap;gap:6px}
-.catpick button{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:999px;border:1px solid var(--line);font-size:13px;font-weight:500;color:var(--muted)}
-.catpick button i{width:8px;height:8px;border-radius:50%;background:var(--c)}
-.catpick button.on{border-color:var(--c);color:var(--text);background:color-mix(in srgb,var(--c) 10%,var(--surface))}
+.catpick button{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 13px 0 10px;border-radius:9px;border:1px solid color-mix(in srgb,var(--c) 28%,var(--line));background:color-mix(in srgb,var(--c) 7%,var(--surface));font-size:13px;font-weight:500;color:color-mix(in srgb,var(--c) 55%,var(--text));transition:all .12s}
+.catpick button i{width:14px;height:14px;border-radius:4px;background:var(--c);flex:none}
+.catpick button:hover{background:color-mix(in srgb,var(--c) 13%,var(--surface))}
+.catpick button.on{border-color:var(--c);background:color-mix(in srgb,var(--c) 18%,var(--surface));box-shadow:inset 0 0 0 1px var(--c);color:var(--text)}
+.prev{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.prev .pl{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-bottom:6px}
+.prev .pill.card{width:180px;cursor:default}
+.prev .row-demo{display:flex;align-items:center;gap:10px;font-size:13px}
+.prev .row-demo .bar{width:3px;height:30px;border-radius:3px;background:var(--c)}
+.prev .row-demo small{display:block;font-size:12px;color:color-mix(in srgb,var(--c) 75%,var(--text))}
 .seg.full{display:flex;width:100%}
 .seg.full button{flex:1}
 .toggle{display:flex;align-items:center;justify-content:space-between;height:42px;cursor:pointer;user-select:none}
@@ -336,6 +343,10 @@ textarea.in{height:auto;min-height:84px;padding:10px 12px;resize:vertical;line-h
 .palette{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
 .palette button{width:30px;height:30px;border-radius:9px;background:var(--c);position:relative}
 .palette button.on::after{content:"";position:absolute;inset:-4px;border-radius:12px;border:1.5px solid var(--text)}
+.palette button.used::before{content:"";position:absolute;left:50%;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;border-radius:50%;background:rgba(255,255,255,.9)}
+.pal-hint{font-size:11.5px;color:var(--faint);margin-top:8px;display:flex;align-items:center;gap:6px}
+.pal-hint i{width:14px;height:14px;border-radius:4px;background:var(--faint);position:relative}
+.pal-hint i::before{content:"";position:absolute;left:50%;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:#fff}
 
 /* toast */
 #toast{position:fixed;left:50%;bottom:calc(28px + var(--sab));transform:translate(-50%,20px);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:500;opacity:0;pointer-events:none;transition:all .2s;z-index:60;display:flex;gap:14px;align-items:center}
@@ -1001,7 +1012,7 @@ function openEditor(id, preset={}){
     <div class="m-b">
       <div class="f"><input class="in title" id="eTitle" placeholder="Título" value="${esc(it.title)}"></div>
       <div class="f"><div style="display:flex;align-items:baseline;justify-content:space-between"><label class="l">Categoria</label><button type="button" class="btn-text" data-newcat style="height:auto;padding:0;font-size:12.5px">+ Nova categoria</button></div><div class="catpick" id="eCat"></div>
-        <div class="newcat hidden" id="eNewCat"><input class="in" id="eNcName" placeholder="Nome da nova categoria"><div class="palette" id="eNcPal" style="margin-top:10px">${PALETTE.map((p,i)=>`<button type="button" class="${i===0?'on':''}" style="--c:${p}" data-p="${p}"></button>`).join('')}</div><div class="row2"><span style="flex:1"></span><button type="button" class="btn-text" id="eNcCancel">Cancelar</button><button type="button" class="btn-primary" id="eNcOk" style="height:36px">Criar categoria</button></div></div></div>
+        <div class="newcat hidden" id="eNewCat"><input class="in" id="eNcName" placeholder="Nome da nova categoria"><div class="palette" id="eNcPal" style="margin-top:10px"></div>${PAL_HINT}<div id="eNcPrev"></div><div class="row2"><span style="flex:1"></span><button type="button" class="btn-text" id="eNcCancel">Cancelar</button><button type="button" class="btn-primary" id="eNcOk" style="height:36px">Criar categoria</button></div></div></div>
       <div class="f"><label class="l">Tipo</label><div class="seg full" id="eType"><button type="button" data-t="evento" class="${it.type==='evento'?'on':''}">Compromisso</button><button type="button" data-t="prazo" class="${it.type==='prazo'?'on':''}">Prazo</button><button type="button" data-t="aviso" class="${it.type==='aviso'?'on':''}">Aviso</button></div>
         <div class="hint" id="eTypeHint"></div></div>
       <div class="f">
@@ -1030,15 +1041,16 @@ function openEditor(id, preset={}){
   const drawCats = () => { q('#eCat').innerHTML = catsArr().map(c=>`<button type="button" class="${c.id===it.cat?'on':''}" data-c="${c.id}" style="--c:${c.color}"><i></i>${esc(c.name)}</button>`).join(''); };
   drawCats();
   let ncColor = PALETTE.find(p=>!catsArr().some(x=>x.color===p)) || PALETTE[0];
-  q('#eNcPal').querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.p===ncColor));
+  const drawNc = () => { q('#eNcPal').innerHTML = paletteHTML(ncColor); q('#eNcPrev').innerHTML = catPreviewHTML(q('#eNcName').value.trim(), ncColor); };
+  drawNc(); q('#eNcName').addEventListener('input', drawNc);
   s.querySelector('.m-b').addEventListener('click', e => { if (e.target.closest('[data-newcat]')){ e.preventDefault(); q('#eNewCat').classList.remove('hidden'); q('#eNcName').focus(); } });
   q('#eCat').onclick = e => {
     if (e.target.closest('[data-newcat]')) return;
     const b = e.target.closest('[data-c]'); if(!b) return; it.cat = b.dataset.c; drawCats();
   };
-  q('#eNcPal').onclick = e => { const b = e.target.closest('[data-p]'); if(!b) return; ncColor = b.dataset.p; q('#eNcPal').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); };
+  q('#eNcPal').onclick = e => { const b = e.target.closest('[data-p]'); if(!b) return; ncColor = b.dataset.p; drawNc(); };
   q('#eNcCancel').onclick = () => q('#eNewCat').classList.add('hidden');
-  const createCat = () => { const n = q('#eNcName').value.trim(); if(!n){ q('#eNcName').focus(); return; } const c = {id:'c'+uid(), name:n, color:ncColor, order:catsArr().length+1}; putCat(c); it.cat = c.id; q('#eNcName').value=''; q('#eNewCat').classList.add('hidden'); drawCats(); };
+  const createCat = () => { const n = q('#eNcName').value.trim(); if(!n){ q('#eNcName').focus(); return; } const c = {id:'c'+uid(), name:n, color:ncColor, order:catsArr().length+1}; putCat(c); it.cat = c.id; q('#eNcName').value=''; q('#eNewCat').classList.add('hidden'); ncColor = PALETTE.find(p=>!catsArr().some(x=>x.color===p)) || PALETTE[0]; drawNc(); drawCats(); };
   q('#eNcOk').onclick = createCat;
   q('#eNcName').addEventListener('keydown', e => { if (e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); createCat(); } });
   const drawLinks = () => { const urls = ((q('#eNote').value+' '+q('#eMore').value).match(/https?:\/\/[^\s)]+/g)||[]); q('#eLinks').innerHTML = urls.map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener">Abrir ${esc(u.replace(/^https?:\/\/(www\.)?/,'').split('/')[0])}</a>`).join(''); };
@@ -1069,6 +1081,19 @@ function openEditor(id, preset={}){
   if (!ex && !preset.copy) setTimeout(()=>q('#eTitle').focus(), 60);
 }
 
+function paletteHTML(sel, exceptId){
+  const used = {}; catsArr().forEach(c => { if (c.id!==exceptId) used[c.color] = (used[c.color]?used[c.color]+', ':'') + c.name; });
+  return PALETTE.map(p=>`<button type="button" class="${p===sel?'on':''} ${used[p]?'used':''}" style="--c:${p}" data-p="${p}" title="${used[p]?'Em uso: '+esc(used[p]):'Livre'}"></button>`).join('');
+}
+const PAL_HINT = '<div class="pal-hint"><i></i>cor já usada por outra categoria</div>';
+function catPreviewHTML(name, color, short){
+  const nm = name || 'Nova categoria', sh = (short && short.trim()) || catShort({name:nm});
+  return `<div class="prev" style="--c:${color}">
+    <div><div class="pl">Etiqueta</div><div class="catpick"><button type="button" class="on" style="--c:${color}" tabindex="-1"><i></i>${esc(nm)}</button></div></div>
+    <div><div class="pl">No calendário</div><div class="pill card" style="--c:${color}"><div class="ph"><i class="pc">${CHK}</i><b class="tg">${esc(sh)}</b></div><div class="pt">Exemplo de compromisso</div><div class="pn">Observação curta</div></div></div>
+    <div><div class="pl">Nas listas</div><div class="row-demo"><span class="bar"></span><div>Exemplo de compromisso<small>${esc(nm)}</small></div></div></div>
+  </div>`;
+}
 function openCatEditor(id){
   const ex = id ? S.cats[id] : null;
   const c = ex ? {...ex} : {id:'c'+uid(), name:'', color: PALETTE.find(p=>!catsArr().some(x=>x.color===p)) || PALETTE[0], order: catsArr().length+1};
@@ -1077,11 +1102,13 @@ function openCatEditor(id){
     <div class="m-b">
       <div class="f"><label class="l">Nome</label><input class="in" id="cName" value="${esc(c.name)}" placeholder="Ex.: Plantões"></div>
       <div class="f"><label class="l">Sigla no calendário (opcional)</label><input class="in" id="cShort" value="${esc(c.short||'')}" maxlength="10" placeholder="${esc(catShort({name:c.name||'Plantões'}))}"><div class="hint">Texto curto que aparece antes do título no calendário.</div></div>
-      <div class="f"><label class="l">Cor</label><div class="palette" id="cPal">${PALETTE.map(p=>`<button type="button" class="${p===c.color?'on':''}" style="--c:${p}" data-p="${p}"></button>`).join('')}</div></div>
+      <div class="f"><label class="l">Cor</label><div class="palette" id="cPal"></div>${PAL_HINT}<div id="cPrev"></div></div>
     </div>
     <div class="m-f">${ex?'<button class="btn-text danger" data-del>Excluir</button>':''}<span class="sp"></span><button class="btn-text" data-x>Cancelar</button><button class="btn-primary" data-save>Salvar</button></div>`, 'sm');
   const q = sel => s.querySelector(sel);
-  q('#cPal').onclick = e => { const b = e.target.closest('[data-p]'); if(!b) return; c.color = b.dataset.p; q('#cPal').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); };
+  const drawC = () => { q('#cPal').innerHTML = paletteHTML(c.color, ex?ex.id:null); q('#cPrev').innerHTML = catPreviewHTML(q('#cName').value.trim(), c.color, q('#cShort').value); };
+  drawC(); q('#cName').addEventListener('input', drawC); q('#cShort').addEventListener('input', drawC);
+  q('#cPal').onclick = e => { const b = e.target.closest('[data-p]'); if(!b) return; c.color = b.dataset.p; drawC(); };
   s.querySelectorAll('[data-x]').forEach(b => b.onclick = () => closeModal());
   const save = () => { const n = q('#cName').value.trim(); if(!n){ q('#cName').focus(); return; } putCat({...c, name:n, short:q('#cShort').value.trim()}); closeModal(); };
   q('[data-save]').onclick = save;
