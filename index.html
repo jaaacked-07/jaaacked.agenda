@@ -1332,28 +1332,57 @@ function notifState(){
   if (Notification.permission === 'denied') return 'denied';
   return (Notification.permission === 'granted' && load('pushToken', null)) ? 'on' : 'off';
 }
+async function saveToken(token){
+  const id = token.replace(/[^A-Za-z0-9_-]/g,'').slice(-40);
+  const data = {token, ua: navigator.userAgent.slice(0,120), at: Date.now()};
+  try {
+    if (!FB) throw new Error('sem FB');
+    await Promise.race([FB.fs.setDoc(FB.fs.doc(FB.db, 'users', USER, 'tokens', id), data), new Promise((_,rej)=>setTimeout(()=>rej(new Error('tempo esgotado')), 8000))]);
+  } catch(e){
+    // plano B: grava direto pela API do Firestore
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/users/${USER}/tokens/${id}?key=${FIREBASE_CONFIG.apiKey}`;
+    const r = await fetch(url, {method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({fields:{token:{stringValue:token}, ua:{stringValue:data.ua}, at:{integerValue:String(data.at)}}})});
+    if (!r.ok) throw new Error('não salvou o aparelho (' + r.status + ')');
+  }
+  return id;
+}
 async function enablePush(){
   const st = notifState();
   if (st==='ios-install'){ toast('No iPhone, instale o app pelo Safari (Compartilhar > Adicionar à Tela de Início) e ative por lá.'); return; }
-  if (st==='pending-config'){ toast('Falta a chave de notificações do Firebase. Assim que ela for configurada, este botão funciona.'); return; }
+  if (st==='pending-config'){ toast('Falta a chave de notificações do Firebase.'); return; }
   if (st==='unsupported'){ toast('Este navegador não aceita notificações.'); return; }
   const perm = await Notification.requestPermission();
   if (perm !== 'granted'){ toast('Permissão negada. Libere as notificações nas configurações do aparelho.'); renderView(); return; }
+  toast('Ativando…');
+  let step = 'carregar o Firebase';
   try {
     const V = '10.12.2';
+    const appMod = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
     const msg = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-messaging.js`);
+    const app = FB ? FB.app : (appMod.getApps().find(a => a.name==='push') || appMod.initializeApp(FIREBASE_CONFIG, 'push'));
+    step = 'preparar o app';
     const reg = await navigator.serviceWorker.ready;
-    const token = await msg.getToken(msg.getMessaging(FB.app), {vapidKey: VAPID_KEY, serviceWorkerRegistration: reg});
-    if (!token) throw new Error('sem token');
-    await FB.fs.setDoc(FB.fs.doc(FB.db, 'users', USER, 'tokens', token.slice(-40)), {token, ua: navigator.userAgent.slice(0,120), at: Date.now()});
-    store('pushToken', token);
+    step = 'registrar no serviço de notificações';
+    let token = null, lastErr = null;
+    for (let i = 0; i < 3 && !token; i++){  // no iPhone a 1ª tentativa às vezes falha
+      try { token = await msg.getToken(msg.getMessaging(app), {vapidKey: VAPID_KEY, serviceWorkerRegistration: reg}); }
+      catch(e){ lastErr = e; await new Promise(r => setTimeout(r, 1200)); }
+    }
+    if (!token) throw lastErr || new Error('sem token');
+    step = 'salvar este aparelho';
+    await saveToken(token);
+    store('pushToken', token); S.pushErr = '';
     toast('Notificações ativadas neste aparelho');
-  } catch(e){ console.error(e); toast('Não foi possível ativar as notificações agora.'); }
+  } catch(e){
+    console.error(e);
+    S.pushErr = `Falhou ao ${step}: ${(e && (e.code || e.message)) || e}`.slice(0, 160);
+    toast('Não foi possível ativar. O motivo aparece em Ajustes.');
+  }
   renderView();
 }
 async function disablePush(){
   const tk = load('pushToken', null);
-  if (tk && FB) await FB.fs.deleteDoc(FB.fs.doc(FB.db, 'users', USER, 'tokens', tk.slice(-40))).catch(()=>{});
+  if (tk && FB) await FB.fs.deleteDoc(FB.fs.doc(FB.db, 'users', USER, 'tokens', tk.replace(/[^A-Za-z0-9_-]/g,'').slice(-40))).catch(()=>{});
   localStorage.removeItem(LS('pushToken')); toast('Notificações desativadas neste aparelho'); renderView();
 }
 function saveNotif(patch){
@@ -1379,7 +1408,7 @@ function notifCardHTML(){
   const btn = st==='on' ? '<button class="btn-ghost" data-act="pushoff">Desativar</button>' : (st==='off'||st==='pending-config'||st==='ios-install') ? '<button class="btn-primary" data-act="pushon" style="height:36px">Ativar</button>' : '';
   const rem = n.reminders || [];
   return `<div class="card"><h4>Notificações</h4>
-    <div class="srow"><div class="grow">Notificações no celular<div class="sub">${stTxt}</div></div>${btn}</div>
+    <div class="srow"><div class="grow">Notificações no celular<div class="sub">${stTxt}</div>${S.pushErr?`<div class="sub" style="color:var(--danger);margin-top:4px">${esc(S.pushErr)}</div>`:''}</div>${btn}</div>
     <div class="srow"><div class="grow">Resumo do dia<div class="sub">Mostra o principal compromisso de hoje e quantos outros existem.</div></div><input type="time" class="in" style="width:122px" data-nset="morning" value="${n.morning||''}"></div>
     <div class="srow"><div class="grow">Lembretes de pendências<div class="sub">Só são enviados se ainda houver algo pendente. Alternam entre os itens pendentes. Deixe em branco para remover um horário.</div><div class="notif-times" style="margin-top:8px">${[0,1,2,3].map(i=>`<input type="time" class="in" data-nrem="${i}" value="${rem[i]||''}">`).join('')}</div></div></div>
     <div class="srow"><div class="grow">Prazos chegando<div class="sub">Aviso 3 dias e 1 dia antes do fim de prazos de vários dias.</div></div><input type="time" class="in" style="width:122px" data-nset="ahead" value="${n.ahead||''}"></div>

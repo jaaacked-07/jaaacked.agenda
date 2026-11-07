@@ -7,7 +7,7 @@ admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.F
 const db = admin.firestore();
 const U = db.collection('users').doc('jaaacked');
 const TZ = 'America/Sao_Paulo';
-const WINDOW = 100; // minutos de tolerância (o agendador do GitHub pode atrasar)
+const WINDOW = 180; // minutos de tolerância caso o disparo atrase
 
 const DEF = { enabled: true, morning: '07:30', evening: '20:00', ahead: '09:00', reminders: ['11:00', '15:00', '18:00', '21:00'], muted: [] };
 const SEM3 = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
