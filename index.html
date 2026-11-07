@@ -1375,7 +1375,7 @@ async function enablePush(){
     toast('Notificações ativadas neste aparelho');
   } catch(e){
     console.error(e);
-    S.pushErr = `Falhou ao ${step}: ${(e && (e.code || e.message)) || e}`.slice(0, 160);
+    S.pushErr = `Falhou ao ${step}: ${e && e.code ? e.code + ' · ' : ''}${(e && e.message) || e}`.slice(0, 400);
     toast('Não foi possível ativar. O motivo aparece em Ajustes.');
   }
   renderView();
