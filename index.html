@@ -1407,7 +1407,7 @@ async function testNotif(){
   const it = list[0];
   const reg = await navigator.serviceWorker.ready;
   const more = list.filter(x=>x.date===(it&&it.date)).length - 1;
-  reg.showNotification(it ? 'Hoje: '+it.title : 'Agenda', {
+  reg.showNotification(it ? 'Teste: '+it.title : 'Teste da Agenda', {
     body: it ? `${catShort(cat(it.cat))} · ${it.note || dateTag(it.date)}${more>0?`\nMais ${more} compromisso${more>1?'s':''} agendado${more>1?'s':''} para hoje`:''}` : 'Exemplo de notificação.',
     icon: 'icon-192.png', badge: 'favicon.png', tag: 'teste', data: {id: it ? it.id : ''},
     actions: it ? [{action:'done', title:'Feito'}, {action:'snooze', title:'Adiar 1 dia'}] : []

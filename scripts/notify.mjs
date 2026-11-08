@@ -16,7 +16,7 @@ admin.initializeApp({ credential: admin.credential.cert(SA), projectId: 'jaaacke
 const db = admin.firestore();
 const U = db.collection('users').doc('jaaacked');
 const TZ = 'America/Sao_Paulo';
-const WINDOW = 180; // minutos de tolerância caso o disparo atrase
+const WINDOW = 30; // minutos de tolerância: avisos atrasados mais que isso não são enviados
 
 const DEF = { enabled: true, morning: '07:30', evening: '20:00', ahead: '09:00', reminders: ['11:00', '15:00', '18:00', '21:00'], muted: [] };
 const SEM3 = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
