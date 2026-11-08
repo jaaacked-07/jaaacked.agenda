@@ -133,6 +133,12 @@ if (due('ahead', cfg.ahead)) {
   });
 }
 
+// 4. Compromisso com horário: aviso 2 horas antes
+items.filter(it => it.date === today && it.time && !it.done).forEach(it => {
+  const t0 = toMin(it.time), key = 'ev|' + it.id;
+  if (now.min >= t0 - 120 && now.min < t0 && !log[`${today}|${key}`]) push(key, it, `Às ${it.time}: ${it.title}`, line(it));
+});
+
 // 5. Véspera: um compromisso de amanhã + quantos mais
 if (due('evening', cfg.evening)) {
   const list = items.filter(it => it.date === tomorrow && !it.done).sort(order);

@@ -1,8 +1,10 @@
 name: Notificações da agenda
 
+# Roda em ciclos de ~5h50 conferindo a cada 5 minutos e, ao terminar, inicia o próximo ciclo sozinho.
+# O agendamento abaixo é só uma reserva para religar o ciclo caso ele pare.
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/30 * * * *'
   workflow_dispatch:
   push:
     branches: [main]
@@ -12,6 +14,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: notificacoes
@@ -20,7 +23,7 @@ concurrency:
 jobs:
   enviar:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 358
     steps:
       - uses: actions/checkout@v4
         with:
@@ -30,14 +33,20 @@ jobs:
           node-version: 20
       - name: Instalar dependências
         run: npm install --no-save --no-audit --no-fund firebase-admin@12 web-push@3
-      - name: Enviar notificações
+      - name: Enviar notificações (a cada 5 minutos)
         env:
           FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
-        run: node scripts/notify.mjs
+        run: |
+          end=$(( $(date +%s) + 5*3600 + 45*60 ))
+          while [ "$(date +%s)" -lt "$end" ]; do
+            git pull -q --ff-only origin main || true
+            node scripts/notify.mjs || true
+            sleep 300
+          done
       # O GitHub pausa tarefas agendadas após 60 dias sem alterações no repositório.
-      # Este passo faz um registro vazio a cada 45 dias para manter as notificações ativas.
       - name: Manter agendamento ativo
         run: |
+          git pull -q --ff-only origin main || true
           last=$(git log -1 --format=%ct)
           now=$(date +%s)
           if [ $((now - last)) -gt 3888000 ]; then
@@ -46,3 +55,8 @@ jobs:
             git commit --allow-empty -m "Manter notificações ativas"
             git push
           fi
+      - name: Iniciar o próximo ciclo
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run notificacoes.yml --ref main --repo "$GITHUB_REPOSITORY"
