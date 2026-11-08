@@ -40,7 +40,8 @@ jobs:
           end=$(( $(date +%s) + 5*3600 + 45*60 ))
           while [ "$(date +%s)" -lt "$end" ]; do
             git pull -q --ff-only origin main || true
-            node scripts/notify.mjs || true
+            node scripts/notify.mjs; code=$?
+            if [ "$code" -eq 3 ]; then break; fi
             sleep 300
           done
       # O GitHub pausa tarefas agendadas após 60 dias sem alterações no repositório.
