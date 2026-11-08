@@ -4,7 +4,10 @@ import admin from 'firebase-admin';
 import webpush from 'web-push';
 
 if (!process.env.FIREBASE_SA) { console.log('FIREBASE_SA não configurado; nada a fazer.'); process.exit(0); }
-admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SA)) });
+const SA = JSON.parse(process.env.FIREBASE_SA);
+console.log('Projeto da chave secreta:', SA.project_id);
+if (SA.project_id !== 'jaaacked-agenda') { console.log('ERRO: a chave FIREBASE_SA é de outro projeto (' + SA.project_id + '). Gere a chave em jaaacked-agenda.'); process.exit(1); }
+admin.initializeApp({ credential: admin.credential.cert(SA), projectId: 'jaaacked-agenda' });
 const db = admin.firestore();
 const U = db.collection('users').doc('jaaacked');
 const TZ = 'America/Sao_Paulo';
