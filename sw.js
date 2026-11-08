@@ -1,4 +1,4 @@
-const VERSION = 'agenda-v13';
+const VERSION = 'agenda-v14';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './favicon.png'];
 
 const FIREBASE_CONFIG = {
@@ -85,10 +85,14 @@ self.addEventListener('fetch', e => {
   if (url.hostname.includes('googleapis.com') && !/fonts\.googleapis\.com$/.test(url.hostname)) return;
 
   if (req.mode === 'navigate') {
-    e.respondWith(
-      fetch(req).then(r => { const copy = r.clone(); caches.open(VERSION).then(c => c.put('./index.html', copy)); return r; })
-        .catch(() => caches.match('./index.html'))
-    );
+    // abre na hora com a cópia salva e atualiza em segundo plano (evita tela em branco com internet lenta)
+    e.respondWith((async () => {
+      const c = await caches.open(VERSION);
+      const cached = await c.match('./index.html');
+      const net = fetch(req, { cache: 'no-store' }).then(r => { if (r && r.ok) c.put('./index.html', r.clone()); return r; });
+      if (cached) { e.waitUntil(net.catch(() => {})); return cached; }
+      try { return await net; } catch (_) { return new Response('Sem conexão', { status: 503 }); }
+    })());
     return;
   }
 

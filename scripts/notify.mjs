@@ -38,6 +38,12 @@ if (!keys || !keys.privateKey) {
   console.log('Chaves de notificação criadas.');
 }
 await U.collection('meta').doc('vapid').set({ publicKey: keys.publicKey });
+console.log('Chave pública:', keys.publicKey);
+// diagnóstico: o app consegue ler a chave pela API pública?
+try {
+  const r = await fetch(`https://firestore.googleapis.com/v1/projects/jaaacked-agenda/databases/(default)/documents/users/jaaacked/meta/vapid?key=AIzaSyDoiKo-h2ovNdOTOZvuFKMdYwspCxjBhQY`);
+  console.log('Leitura pública da chave:', r.status, (await r.text()).slice(0, 200).replace(/\s+/g, ' '));
+} catch (e) { console.log('Leitura pública falhou:', e.message); }
 webpush.setVapidDetails('https://jaaacked-07.github.io/jaaacked.agenda/', keys.publicKey, keys.privateKey);
 
 const [itemsSnap, catsSnap, tokSnap, notifDoc, logDoc] = await Promise.all([
@@ -82,7 +88,7 @@ const log = logDoc.exists ? (logDoc.data().sent || {}) : {};
 const sentNow = {};
 const rank = it => (it.type === 'evento' && it.time ? 0 : it.type === 'prazo' ? 1 : it.type === 'evento' ? 2 : 3);
 const order = (a, b) => rank(a) - rank(b) || (a.time || '99').localeCompare(b.time || '99') || a.title.localeCompare(b.title);
-const line = it => clip(`${short(it.cat)} · ${it.note || (it.start ? 'até ' + dateTag(it.date) : dateTag(it.date))}`, 140);
+const line = it => clip(`${short(it.cat)} · ${it.time ? it.time + (it.timeEnd ? '–' + it.timeEnd : '') + ' · ' : ''}${it.note || (it.start ? 'até ' + dateTag(it.date) : dateTag(it.date))}`, 140);
 const pendingOf = it => !it.done && it.type !== 'aviso';
 
 const todayItems = items.filter(it => it.date === today && !it.done).sort(order);
@@ -123,13 +129,6 @@ if (due('ahead', cfg.ahead)) {
     if (want.includes(d)) push('ahead|' + it.id, it, `Faltam ${d} ${plural(d, 'dia', 'dias')}: ${it.title}`, `${short(it.cat)} · até ${dateTag(it.date)}`);
   });
 }
-
-// 4. Compromisso com horário: 2 horas antes
-items.filter(it => it.date === today && it.time && !it.done).forEach(it => {
-  const m = toMin(it.time) - 120;
-  const key = 'ev|' + it.id;
-  if (now.min >= m && now.min < toMin(it.time) && !log[`${today}|${key}`]) push(key, it, `Às ${it.time}: ${it.title}`, line(it));
-});
 
 // 5. Véspera: um compromisso de amanhã + quantos mais
 if (due('evening', cfg.evening)) {

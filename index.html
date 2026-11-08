@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
 <style>
 :root{
   --bg:#F6F7F8; --surface:#FFFFFF; --surface-2:#F0F1F3; --line:#E5E7EA; --line-2:#D6D9DE;
@@ -522,8 +522,8 @@ const FIREBASE_CONFIG_REAL = {
 
 const FIREBASE_CONFIG = (location.hostname==="localhost") ? null : FIREBASE_CONFIG_REAL;
 const USER = 'jaaacked';
-/* Chave pública de notificações (Firebase > Configurações do projeto > Cloud Messaging > Web Push) */
-const VAPID_KEY = 'BKVhnmci8JkM_pX5QLlsrSKVZknKUtsTrnwak0ei-TzVVLTygG4aHt844XVeUTm6OHlzuk7PLGR1RYNZse2FeGg';
+/* chave pública do Web Push (cópia de segurança; o app também busca no Firestore) */
+const PUSH_PUBLIC_KEY = '';
 const NOTIF_DEFAULT = {enabled:true, morning:'07:30', evening:'20:00', ahead:'09:00', reminders:['11:00','15:00','18:00','21:00'], muted:[]};
 const LS = k => 'agenda.' + k;
 
@@ -985,7 +985,7 @@ function pillHTML(o){
   const it = o.it, c = cat(it.cat), tg = `<b class="tg">${esc(catShort(c))}</b>`;
   if (o.kind==='main'){
     const late = isLate(it);
- return `<div class="pill card ${it.done?'done':''}" ${it.start?`data-r="${it.id}"`:''} data-open="${it.id}" data-drag="${it.id}" data-kind="main" style="--c:${c.color}" title="${esc(c.name)}${it.done?' · feito':late?' · pendente':''}"><div class="ph"><i class="pc ${it.done?'on':''} ${late?'late':''}" data-done="${it.id}">${CHK}</i>${tg}${it.time?`<em>${it.time}</em>`:''}</div><div class="pt">${esc(it.title)}</div>${it.note?`<div class="pn">${esc(it.note)}</div>`:''}</div>`;
+ return `<div class="pill card ${it.done?'done':''}" ${it.start?`data-r="${it.id}"`:''} data-open="${it.id}" data-drag="${it.id}" data-kind="main" style="--c:${c.color}" title="${esc(c.name)}${it.done?' · feito':late?' · pendente':''}"><div class="ph"><i class="pc ${it.done?'on':''} ${late?'late':''}" data-done="${it.id}">${CHK}</i>${tg}${it.time?`<em>${it.time}${it.timeEnd?'–'+it.timeEnd:''}</em>`:''}</div><div class="pt">${esc(it.title)}</div>${it.note?`<div class="pn">${esc(it.note)}</div>`:''}</div>`;
   }
   const tip = esc(c.name+' · '+it.title+(it.note?'\n'+it.note:''));
  if (o.kind==='start') return `<div class="pill start" data-r="${it.id}" data-open="${it.id}" data-drag="${it.id}" data-kind="start" style="--c:${c.color}" title="${tip} · começa (prazo até ${ddmm(it.date)})">${tg}<span>Início · ${esc(it.title)}</span></div>`;
@@ -1145,7 +1145,8 @@ function renderView(){
 }
 function render(){
   if (!S.items) return;
-  renderNav(); renderCats(); renderMini(); renderSync(); renderTop(); renderView(); updateBadge();
+  try { renderNav(); renderCats(); renderMini(); renderSync(); renderTop(); renderView(); updateBadge(); }
+  catch(e){ console.error(e); const v = $('#view'); if (v && !v.innerHTML.trim()) v.innerHTML = '<div class="empty">Não foi possível mostrar a agenda. Puxe para atualizar ou feche e abra o app.</div>'; }
 }
 
 /* ---------- Modal ---------- */
@@ -1177,7 +1178,6 @@ function openEditor(id, preset={}){
   const ex = id ? S.items[id] : null;
   const it = ex ? {...ex} : preset.copy ? {...preset.copy} : preset.prefill ? {id:uid(), title:preset.prefill.title||'', more:preset.prefill.more||'', cat:(catsArr()[0]||{}).id||'pessoal', type:'evento', date:preset.date||todayIso(), start:'', time:'', timeEnd:'', note:'', done:false} : {id:uid(), title:'', cat: preset.cat || (catsArr()[0]||{}).id || 'pessoal', type:'evento', date: preset.date || S.sel || todayIso(), start:'', time:'', timeEnd:'', note:'', done:false};
   const ranged = !!it.start;
-  const allDay = !it.time;
   const s = openModal(`
     <div class="m-h"><h3>${ex?'Editar':'Novo compromisso'}</h3><button class="icon-btn" data-x aria-label="Fechar">${I.x}</button></div>
     <div class="m-b">
@@ -1198,11 +1198,10 @@ function openEditor(id, preset={}){
         <div id="eRepDaysWrap" class="${['weekly','biweekly'].includes((it.repeat||{}).freq)?'':'hidden'}" style="margin-top:10px"><div class="seg full" id="eRepDays">${['D','S','T','Q','Q','S','S'].map((l,i)=>`<button type="button" data-wd="${i}" class="${repDays(it).includes(i)?'on':''}" title="${SEM[i]}">${l}</button>`).join('')}</div></div>
         <div id="eRepUntilWrap" class="${(it.repeat||{}).freq?'':'hidden'}" style="margin-top:10px"><label class="l">Até (opcional)</label><input type="date" class="in" id="eRepUntil" value="${(it.repeat||{}).until||''}"><div class="hint">Em branco, repete sem data para acabar.</div></div>
       </div>
-      <div class="f">
-        <div class="toggle ${allDay?'on':''}" id="eAll"><span>Dia inteiro</span><div class="sw2"></div></div>
-        <div class="f2 ${allDay?'hidden':''}" id="eTimes" style="margin-top:6px">
-          <div><label class="l">Das</label><input type="time" class="in" id="eTime" value="${it.time||''}"></div>
-          <div><label class="l">Até</label><input type="time" class="in" id="eTimeEnd" value="${it.timeEnd||''}"></div>
+      <div class="f"><label class="l">Horário <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--faint);margin-left:4px">opcional · só para organizar a agenda</span></label>
+        <div class="f2" id="eTimes">
+          <div><input type="time" class="in" id="eTime" value="${it.time||''}" aria-label="Início"><div class="hint">Início</div></div>
+          <div><input type="time" class="in" id="eTimeEnd" value="${it.timeEnd||''}" aria-label="Fim"><div class="hint">Fim</div></div>
         </div>
       </div>
       <div class="f"><label class="l">Observação</label><textarea class="in" id="eNote" rows="2" style="min-height:58px" placeholder="Curta e direta. Aparece no calendário e nas listas.">${esc(it.note)}</textarea></div>
@@ -1244,7 +1243,6 @@ function openEditor(id, preset={}){
   if ((it.repeat||{}).freq) q('#eDateLbl').textContent = 'Começa em';
   q('#eType').onclick = e => { const b = e.target.closest('[data-t]'); if(!b) return; it.type = b.dataset.t; q('#eType').querySelectorAll('button').forEach(x=>x.classList.toggle('on', x===b)); setHint(); };
   q('#eRange').onclick = () => { const on = !q('#eRange').classList.contains('on'); q('#eRange').classList.toggle('on', on); q('#eStartWrap').classList.toggle('hidden', !on); q('#eDateLbl').textContent = on?'Fim':'Data'; if (on && !q('#eStart').value) q('#eStart').value = q('#eDate').value; };
-  q('#eAll').onclick = () => { const on = !q('#eAll').classList.contains('on'); q('#eAll').classList.toggle('on', on); q('#eTimes').classList.toggle('hidden', on); };
   q('#eDone').onclick = () => q('#eDone').classList.toggle('on');
   s.querySelectorAll('[data-x]').forEach(b => b.onclick = () => closeModal());
   const save = () => {
@@ -1254,12 +1252,13 @@ function openEditor(id, preset={}){
     let start = q('#eRange').classList.contains('on') ? q('#eStart').value : '';
     if (start && start > date){ toast('A data de início precisa ser antes do fim.'); return; }
     if (start === date) start = '';
-    const allD = q('#eAll').classList.contains('on');
+    const tIni = q('#eTime').value, tFim = tIni ? q('#eTimeEnd').value : '';
+    if (tIni && tFim && tFim < tIni){ toast('O horário de fim precisa ser depois do início.'); return; }
     const rf = q('#eRep').value;
     if (rf) start = '';
     const repeat = rf ? {freq: rf, ...(['weekly','biweekly'].includes(rf) ? {days:[...repWd].sort()} : {}), ...(q('#eRepUntil').value ? {until:q('#eRepUntil').value} : {})} : null;
     if (!rf) { delete it.doneDates; delete it.exDates; }
-    const out = {...it, repeat, title, date, start, time: allD?'':q('#eTime').value, timeEnd: allD?'':q('#eTimeEnd').value, note:q('#eNote').value.trim(), more:q('#eMore').value.trim(), done: rf ? false : q('#eDone').classList.contains('on')};
+    const out = {...it, repeat, title, date, start, time: tIni, timeEnd: tFim, note:q('#eNote').value.trim(), more:q('#eMore').value.trim(), done: rf ? false : q('#eDone').classList.contains('on')};
     if (!rf) delete out.repeat;
     putItem(out); closeModal(); toast(ex?'Alterações salvas':'Compromisso criado');
   };
@@ -1334,12 +1333,17 @@ function notifState(){
 }
 const fsREST = path => `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/(default)/documents/${path}?key=${FIREBASE_CONFIG.apiKey}`;
 async function getPushPublicKey(){
+  // 1º: direto da API (não depende do cache local do Firestore)
   try {
-    if (FB){ const d = await FB.fs.getDoc(FB.fs.doc(FB.db, 'users', USER, 'meta', 'vapid')); if (d.exists()) return d.data().publicKey; }
-  } catch(e){}
-  const r = await fetch(fsREST(`users/${USER}/meta/vapid`));
-  if (!r.ok) return null;
-  const j = await r.json(); return j.fields && j.fields.publicKey ? j.fields.publicKey.stringValue : null;
+    const r = await fetch(fsREST(`users/${USER}/meta/vapid`), {cache:'no-store'});
+    if (r.ok){ const j = await r.json(); const k = j.fields && j.fields.publicKey && j.fields.publicKey.stringValue; if (k) return k; }
+    else S.pushDiag = 'API ' + r.status;
+  } catch(e){ S.pushDiag = 'API: ' + e.message; }
+  // 2º: pelo SDK, forçando o servidor
+  try {
+    if (FB){ const d = await (FB.fs.getDocFromServer || FB.fs.getDoc)(FB.fs.doc(FB.db, 'users', USER, 'meta', 'vapid')); if (d.exists()) return d.data().publicKey; }
+  } catch(e){ S.pushDiag = (S.pushDiag ? S.pushDiag + ' · ' : '') + 'SDK: ' + (e.code || e.message); }
+  return PUSH_PUBLIC_KEY || null;
 }
 function b64ToBytes(b64){ const pad = '='.repeat((4 - b64.length % 4) % 4); const raw = atob((b64 + pad).replace(/-/g,'+').replace(/_/g,'/')); return Uint8Array.from(raw, c => c.charCodeAt(0)); }
 async function hashId(str){ const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str)); return [...new Uint8Array(h)].slice(0,16).map(b=>b.toString(16).padStart(2,'0')).join(''); }
@@ -1365,7 +1369,7 @@ async function enablePush(){
   let step = 'buscar a chave do servidor';
   try {
     const pub = await getPushPublicKey();
-    if (!pub) throw new Error('o servidor de envio ainda está se preparando. Tente de novo em alguns minutos.');
+    if (!pub) throw new Error('não encontrei a chave no servidor' + (S.pushDiag ? ' (' + S.pushDiag + ')' : '') + '.');
     step = 'preparar o app';
     const reg = await navigator.serviceWorker.ready;
     step = 'registrar no serviço de notificações';
@@ -1717,7 +1721,7 @@ function start(){
   if (!FIREBASE_CONFIG){ migrateNotes(); migrateCatColors(); }
   if (Object.keys(S.items).length) handleParams(); else setTimeout(handleParams, 1800);
   // atualiza "hoje" quando o dia vira ou o app volta ao primeiro plano
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden){ _arr = null; render(); } });
 }
 function login(){
   const v = $('#loginUser').value.trim().toLowerCase();
