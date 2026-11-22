@@ -824,9 +824,13 @@ function applyPendingTo(o, kind){
   }
   return o;
 }
+let resyncing = false;
 async function resync(){
-  if (!FB) return;
-  try { await FB.fs.disableNetwork(FB.db); await FB.fs.enableNetwork(FB.db); } catch(e){}
+  if (!FB || resyncing) return;
+  resyncing = true;
+  try { await resyncInner(); } finally { resyncing = false; }
+}
+async function resyncInner(){
   await flushPending();
   try {
     const snap = await FB.fs.getDocsFromServer(FB.itemsCol);
@@ -837,15 +841,16 @@ async function resync(){
 async function initSync(){
   if (!FIREBASE_CONFIG) return;
   try {
-    const V = '10.12.2';
+    const V = '10.14.1';
     const appMod = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
     const fs = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
     const app = appMod.initializeApp(FIREBASE_CONFIG);
+    // cache só em memória em todos os aparelhos: o cache em disco do Firestore causava travamentos e o erro
+    // "INTERNAL ASSERTION FAILED". A cópia local continua salva pelo próprio app (abre na hora, funciona sem internet).
     let db;
-    // no iPhone, o cache em disco do Firestore costuma travar a sincronização: usa memória (a cópia local fica no próprio app)
-    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    try { db = fs.initializeFirestore(app, {localCache: ios ? fs.memoryLocalCache() : fs.persistentLocalCache({tabManager: fs.persistentMultipleTabManager()})}); }
+    try { db = fs.initializeFirestore(app, {localCache: fs.memoryLocalCache()}); }
     catch(e){ db = fs.getFirestore(app); }
+    try { await fs.clearIndexedDbPersistence(db); } catch(e){}  // apaga o cache antigo em disco, se existir
     const itemsCol = fs.collection(db, 'users', USER, 'items');
     const catsCol = fs.collection(db, 'users', USER, 'cats');
     const metaRef = fs.doc(db, 'users', USER, 'meta', 'seed');
@@ -883,7 +888,7 @@ async function initSync(){
       if (!snap.metadata.fromCache){ S.lastSync = Date.now(); S.syncErr = ''; store('lastServerSync', Date.now()); }
       setSync(snap.metadata.fromCache ? 'offline' : 'ok'); render();
       if (!snap.metadata.fromCache){ migrateNotes(); if (Object.keys(pend()).length) flushPending(); }
-    }, e => { S.syncErr = (e.code||e.message||'') + ''; setSync('erro'); });
+    }, e => { S.syncErr = (e.code||e.message||'') + ''; setSync('erro'); fsCrashGuard(e.message); });
     const catsBefore = {...(S.cats||{})}; let catsRecovered = false;
     fs.onSnapshot(catsCol, snap => {
       const o = {}; snap.forEach(d => o[d.id] = d.data());
@@ -895,9 +900,10 @@ async function initSync(){
       if (Object.keys(o).length){ S.cats = applyPendingTo(o, 'cat'); persist(); render(); if (!snap.metadata.fromCache) migrateCatColors(); }
     });
     window.addEventListener('online', () => resync());
+    S.syncErr = '';
     window.addEventListener('offline', () => setSync('offline'));
   } catch(e){
-    console.error(e); S.syncErr = (e.code||e.message||'') + ''; setSync('erro');
+    console.error(e); S.syncErr = (e.code||e.message||'') + ''; setSync('erro'); fsCrashGuard(e.message);
   }
 }
 function setSync(s){ S.sync = s; renderSync(); }
@@ -1779,6 +1785,15 @@ function applyTheme(){
   document.querySelectorAll('meta[name="theme-color"]').forEach(m => { m.removeAttribute('media'); m.content = dark ? '#111214' : '#F6F7F8'; });
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
+
+/* se o Firebase travar com erro interno, reinicia o app uma vez (em vez de ficar sem sincronizar) */
+function fsCrashGuard(msg){
+  if (!/INTERNAL ASSERTION FAILED/i.test(String(msg||''))) return;
+  try { if (sessionStorage.getItem('fsReloaded')) return; sessionStorage.setItem('fsReloaded', '1'); } catch(e){ return; }
+  location.reload();
+}
+window.addEventListener('error', e => fsCrashGuard(e.message || (e.error && e.error.message)));
+window.addEventListener('unhandledrejection', e => fsCrashGuard(e.reason && (e.reason.message || e.reason)));
 
 /* ---------- Início ---------- */
 function start(){
