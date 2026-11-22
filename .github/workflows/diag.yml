@@ -1,0 +1,17 @@
+name: Diagnóstico da agenda
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['scripts/diag.mjs', '.github/workflows/diag.yml']
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm install --no-save --no-audit --no-fund firebase-admin@12
+      - env: { FIREBASE_SA: '${{ secrets.FIREBASE_SA }}' }
+        run: node scripts/diag.mjs
