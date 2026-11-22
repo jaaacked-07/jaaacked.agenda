@@ -1,4 +1,4 @@
-const VERSION = 'agenda-v18';
+const VERSION = 'agenda-v19';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png', './favicon.png'];
 
 const FIREBASE_CONFIG = {
@@ -68,7 +68,8 @@ self.addEventListener('notificationclick', e => {
 
 /* ---------- Cache offline ---------- */
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // cache: 'reload' garante que a cópia salva é a versão nova (e não uma antiga guardada pelo navegador)
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -85,11 +86,16 @@ self.addEventListener('fetch', e => {
   if (url.hostname.includes('googleapis.com') && !/fonts\.googleapis\.com$/.test(url.hostname)) return;
 
   if (req.mode === 'navigate') {
-    // abre na hora com a cópia salva e atualiza em segundo plano (evita tela em branco com internet lenta)
+    // versão mais nova da internet (até 3,5 s); se a internet estiver lenta ou ausente, abre a cópia salva
     e.respondWith((async () => {
       const c = await caches.open(VERSION);
-      const cached = await c.match('./index.html');
       const net = fetch(req, { cache: 'no-store' }).then(r => { if (r && r.ok) c.put('./index.html', r.clone()); return r; });
+      const timeout = new Promise(res => setTimeout(() => res(null), 3500));
+      try {
+        const r = await Promise.race([net, timeout]);
+        if (r) return r;
+      } catch (_) {}
+      const cached = await c.match('./index.html');
       if (cached) { e.waitUntil(net.catch(() => {})); return cached; }
       try { return await net; } catch (_) { return new Response('Sem conexão', { status: 503 }); }
     })());
