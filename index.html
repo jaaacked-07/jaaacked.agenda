@@ -493,7 +493,7 @@ textarea.in{height:auto;min-height:84px;padding:10px 12px;resize:vertical;line-h
     <nav class="nav" id="nav"></nav>
     <div class="mini" id="mini"></div>
     <div id="catsBox"></div>
-    <div class="sync" id="syncSide"><i></i><span></span></div>
+    <div class="sync" id="syncSide" data-act="syncnow" style="cursor:pointer" title="Sincronizar agora"><i></i><span></span></div>
   </aside>
   <main>
     <header class="topbar" id="topbar"></header>
@@ -798,6 +798,42 @@ function persist(){ _arr = null; store('items', S.items); store('cats', S.cats);
 
 /* ---------- Sincronização (Firebase) ---------- */
 let FB = null;
+/* alterações ainda não confirmadas pelo servidor (sobrevivem a fechar o app) */
+const pend = () => load('pending', {});
+function markPending(kind, id, val){ const p = pend(); p[kind+':'+id] = val===undefined ? null : val; store('pending', p); }
+function clearPending(key){ const p = pend(); delete p[key]; store('pending', p); }
+async function flushPending(){
+  if (!FB) return;
+  const p = pend();
+  for (const [key, val] of Object.entries(p)){
+    const [kind, id] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':')+1)];
+    const col = kind==='cat' ? FB.catsCol : FB.itemsCol;
+    try {
+      if (val === null) await FB.fs.deleteDoc(FB.fs.doc(col, id));
+      else await FB.fs.setDoc(FB.fs.doc(col, id), val);
+      clearPending(key);
+    } catch(e){ S.syncErr = (e.code||e.message||'') + ''; }
+  }
+}
+function applyPendingTo(o, kind){
+  const p = pend();
+  for (const [key, val] of Object.entries(p)){
+    if (!key.startsWith(kind+':')) continue;
+    const id = key.slice(kind.length+1);
+    if (val === null) delete o[id]; else if (!o[id] || (o[id].updated||0) <= (val.updated||0)) o[id] = val;
+  }
+  return o;
+}
+async function resync(){
+  if (!FB) return;
+  try { await FB.fs.disableNetwork(FB.db); await FB.fs.enableNetwork(FB.db); } catch(e){}
+  await flushPending();
+  try {
+    const snap = await FB.fs.getDocsFromServer(FB.itemsCol);
+    const o = {}; snap.forEach(d => o[d.id] = d.data());
+    S.items = applyPendingTo(o, 'item'); S.lastSync = Date.now(); S.syncErr = ''; persist(); setSync('ok'); render();
+  } catch(e){ S.syncErr = (e.code||e.message||'') + ''; setSync('offline'); }
+}
 async function initSync(){
   if (!FIREBASE_CONFIG) return;
   try {
@@ -806,7 +842,9 @@ async function initSync(){
     const fs = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
     const app = appMod.initializeApp(FIREBASE_CONFIG);
     let db;
-    try { db = fs.initializeFirestore(app, {localCache: fs.persistentLocalCache({tabManager: fs.persistentMultipleTabManager()})}); }
+    // no iPhone, o cache em disco do Firestore costuma travar a sincronização: usa memória (a cópia local fica no próprio app)
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    try { db = fs.initializeFirestore(app, {localCache: ios ? fs.memoryLocalCache() : fs.persistentLocalCache({tabManager: fs.persistentMultipleTabManager()})}); }
     catch(e){ db = fs.getFirestore(app); }
     const itemsCol = fs.collection(db, 'users', USER, 'items');
     const catsCol = fs.collection(db, 'users', USER, 'cats');
@@ -814,7 +852,8 @@ async function initSync(){
     FB = {fs, db, itemsCol, catsCol, app};
     fs.onSnapshot(fs.doc(db, 'users', USER, 'meta', 'notif'), d => { S.notif = Object.assign({}, NOTIF_DEFAULT, d.exists() ? d.data() : {}); if (S.view==='ajustes') renderView(); });
 
-    const meta = await fs.getDoc(metaRef).catch(()=>null);
+    // só cria os dados iniciais se o SERVIDOR confirmar que ainda não existem (nunca a partir de cache)
+    const meta = await fs.getDocFromServer(metaRef).catch(()=>null);
     if (meta && !meta.exists()){
       const batch = fs.writeBatch(db);
       const seedItems = S.items && Object.keys(S.items).length ? S.items : buildSeed();
@@ -824,19 +863,22 @@ async function initSync(){
       batch.set(metaRef, {at: Date.now()});
       await batch.commit();
     }
-    fs.onSnapshot(itemsCol, snap => {
+    await flushPending();
+    fs.onSnapshot(itemsCol, {includeMetadataChanges: true}, snap => {
       const o = {}; snap.forEach(d => o[d.id] = d.data());
-      S.items = o; persist(); setSync(snap.metadata.fromCache ? 'offline' : 'ok'); render();
-      if (!snap.metadata.fromCache) migrateNotes();
-    }, () => setSync('offline'));
+      S.items = applyPendingTo(o, 'item'); persist();
+      if (!snap.metadata.fromCache){ S.lastSync = Date.now(); S.syncErr = ''; }
+      setSync(snap.metadata.fromCache ? 'offline' : 'ok'); render();
+      if (!snap.metadata.fromCache){ migrateNotes(); if (Object.keys(pend()).length) flushPending(); }
+    }, e => { S.syncErr = (e.code||e.message||'') + ''; setSync('erro'); });
     fs.onSnapshot(catsCol, snap => {
       const o = {}; snap.forEach(d => o[d.id] = d.data());
-      if (Object.keys(o).length){ S.cats = o; persist(); render(); if (!snap.metadata.fromCache) migrateCatColors(); }
+      if (Object.keys(o).length){ S.cats = applyPendingTo(o, 'cat'); persist(); render(); if (!snap.metadata.fromCache) migrateCatColors(); }
     });
-    window.addEventListener('online', ()=>setSync('ok'));
-    window.addEventListener('offline', ()=>setSync('offline'));
+    window.addEventListener('online', () => resync());
+    window.addEventListener('offline', () => setSync('offline'));
   } catch(e){
-    console.error(e); setSync('erro');
+    console.error(e); S.syncErr = (e.code||e.message||'') + ''; setSync('erro');
   }
 }
 function setSync(s){ S.sync = s; renderSync(); }
@@ -847,21 +889,27 @@ function putItem(it){
     return putItem({...series, doneDates: dd});
   }
   it.updated = Date.now();
+  Object.keys(it).forEach(k => { if (it[k] === undefined) delete it[k]; });
   S.items[it.id] = it; persist(); render();
-  if (FB) FB.fs.setDoc(FB.fs.doc(FB.itemsCol, it.id), it).catch(()=>setSync('offline'));
+  markPending('item', it.id, it);
+  if (FB) FB.fs.setDoc(FB.fs.doc(FB.itemsCol, it.id), it).then(() => clearPending('item:'+it.id)).catch(e => { S.syncErr = (e.code||e.message||'')+''; setSync('offline'); });
 }
 function delItem(id){
   const old = S.items[id]; delete S.items[id]; persist(); render();
-  if (FB) FB.fs.deleteDoc(FB.fs.doc(FB.itemsCol, id)).catch(()=>{});
+  markPending('item', id, null);
+  if (FB) FB.fs.deleteDoc(FB.fs.doc(FB.itemsCol, id)).then(() => clearPending('item:'+id)).catch(()=>{});
   return old;
 }
 function putCat(c){
+  Object.keys(c).forEach(k => { if (c[k] === undefined) delete c[k]; });
   S.cats[c.id] = c; persist(); render();
-  if (FB) FB.fs.setDoc(FB.fs.doc(FB.catsCol, c.id), c).catch(()=>{});
+  markPending('cat', c.id, c);
+  if (FB) FB.fs.setDoc(FB.fs.doc(FB.catsCol, c.id), c).then(() => clearPending('cat:'+c.id)).catch(()=>{});
 }
 function delCat(id){
   delete S.cats[id]; persist();
-  if (FB) FB.fs.deleteDoc(FB.fs.doc(FB.catsCol, id)).catch(()=>{});
+  markPending('cat', id, null);
+  if (FB) FB.fs.deleteDoc(FB.fs.doc(FB.catsCol, id)).then(() => clearPending('cat:'+id)).catch(()=>{});
 }
 
 /* ---------- Ocorrências por dia ---------- */
@@ -1127,7 +1175,7 @@ function vAjustes(){
     <div class="srow"><div class="grow">Exportar para Google ou Apple Agenda<div class="sub">Gera um arquivo .ics com os prazos e compromissos futuros, com alerta às 9h do dia anterior.</div></div><button class="btn-ghost" data-act="ics">Exportar</button></div>
   </div>
   <div class="card"><h4>Dados</h4>
-    <div class="srow"><div class="grow">Sincronização<div class="sub">${{ok:'Ativa: alterações aparecem em todos os aparelhos.',offline:'Sem conexão no momento. As alterações são enviadas ao reconectar.',conectando:'Conectando…',local:'Firebase ainda não configurado. Os dados ficam só neste aparelho.',erro:'Não foi possível conectar ao Firebase. Confira a configuração.'}[S.sync]}</div></div></div>
+    <div class="srow"><div class="grow">Sincronização<div class="sub">${{ok:'Ativa: alterações aparecem em todos os aparelhos.',offline:'Sem conexão no momento. As alterações são enviadas ao reconectar.',conectando:'Conectando…',local:'Firebase ainda não configurado. Os dados ficam só neste aparelho.',erro:'Não foi possível conectar ao servidor.'}[S.sync]}${S.lastSync?` Última sincronização: ${new Date(S.lastSync).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}.`:''}${Object.keys(pend()).length?` ${Object.keys(pend()).length} alteração(ões) aguardando envio.`:''}</div>${S.syncErr?`<div class="sub" style="color:var(--danger);margin-top:4px">${esc(S.syncErr)}</div>`:''}</div><button class="btn-ghost" data-act="syncnow">Sincronizar agora</button></div>
     <div class="srow"><div class="grow">Backup<div class="sub">Salvar ou restaurar uma cópia de todos os dados.</div></div><button class="btn-ghost" data-act="export">Salvar</button><button class="btn-ghost" data-act="import">Restaurar</button></div>
     <div class="srow"><div class="grow">Usuário<div class="sub">${USER}</div></div><button class="btn-text danger" data-act="logout">Sair</button></div>
   </div>
@@ -1688,6 +1736,7 @@ document.addEventListener('click', e => {
     allcats: () => { S.prefs.hidden = []; savePrefs(); render(); },
     search: () => { S.searchOpen = !S.searchOpen; if (!S.searchOpen) S.q=''; render(); },
     newcat: () => openCatEditor(null),
+    syncnow: async () => { toast('Sincronizando…'); await resync(); renderView(); toast(S.sync==='ok' ? 'Sincronizado' : 'Não foi possível sincronizar agora'); },
     pushon: enablePush, pushoff: disablePush, pushtest: testNotif,
     ics: exportICS, export: exportJSON, import: importJSON,
     logout: () => confirmBox('Sair', 'Você poderá entrar de novo com o mesmo usuário. Seus dados continuam salvos.', 'Sair', () => { localStorage.removeItem(LS('user')); location.reload(); })
@@ -1721,7 +1770,8 @@ function start(){
   if (!FIREBASE_CONFIG){ migrateNotes(); migrateCatColors(); }
   if (Object.keys(S.items).length) handleParams(); else setTimeout(handleParams, 1800);
   // atualiza "hoje" quando o dia vira ou o app volta ao primeiro plano
-  document.addEventListener('visibilitychange', () => { if (!document.hidden){ _arr = null; render(); } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden){ _arr = null; render(); resync(); } });
+  window.addEventListener('pageshow', e => { if (e.persisted) resync(); });
 }
 function login(){
   const v = $('#loginUser').value.trim().toLowerCase();
