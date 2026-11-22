@@ -864,15 +864,34 @@ async function initSync(){
       await batch.commit();
     }
     await flushPending();
+    // itens criados/alterados neste aparelho que nunca chegaram ao servidor (ex.: versão antiga do app) são reenviados
+    const localBefore = {...(S.items||{})}, lastSrv = load('lastServerSync', 0);
+    let recovered = false;
     fs.onSnapshot(itemsCol, {includeMetadataChanges: true}, snap => {
       const o = {}; snap.forEach(d => o[d.id] = d.data());
+      if (!snap.metadata.fromCache && !recovered){
+        recovered = true;
+        let n = 0;
+        for (const [id, it] of Object.entries(localBefore)){
+          if (!it || !it.id) continue;
+          const srv = o[id];
+          if ((!srv && (it.updated||0) > lastSrv) || (srv && (it.updated||0) > (srv.updated||0))){ markPending('item', id, it); n++; }
+        }
+        if (n){ flushPending().then(() => toast(n + (n>1?' itens deste aparelho foram enviados':' item deste aparelho foi enviado') + ' para a nuvem')); }
+      }
       S.items = applyPendingTo(o, 'item'); persist();
-      if (!snap.metadata.fromCache){ S.lastSync = Date.now(); S.syncErr = ''; }
+      if (!snap.metadata.fromCache){ S.lastSync = Date.now(); S.syncErr = ''; store('lastServerSync', Date.now()); }
       setSync(snap.metadata.fromCache ? 'offline' : 'ok'); render();
       if (!snap.metadata.fromCache){ migrateNotes(); if (Object.keys(pend()).length) flushPending(); }
     }, e => { S.syncErr = (e.code||e.message||'') + ''; setSync('erro'); });
+    const catsBefore = {...(S.cats||{})}; let catsRecovered = false;
     fs.onSnapshot(catsCol, snap => {
       const o = {}; snap.forEach(d => o[d.id] = d.data());
+      if (!snap.metadata.fromCache && !catsRecovered && Object.keys(o).length){
+        catsRecovered = true;
+        for (const [id, c] of Object.entries(catsBefore)) if (c && !o[id] && !DEFAULT_CATS.some(d => d.id===id)) { markPending('cat', id, c); }
+        if (Object.keys(pend()).length) flushPending();
+      }
       if (Object.keys(o).length){ S.cats = applyPendingTo(o, 'cat'); persist(); render(); if (!snap.metadata.fromCache) migrateCatColors(); }
     });
     window.addEventListener('online', () => resync());
